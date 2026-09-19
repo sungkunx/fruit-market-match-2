@@ -1358,6 +1358,175 @@ body.combo-bg-3 {
     text-shadow: var(--outline);
 }
 
+/* ---------- 확장 버튼 ---------- */
+
+.expand-btn {
+    position: absolute;
+    right: 6px;
+    bottom: 32px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding: 5px 10px;
+    font-family: inherit;
+    color: var(--wood-dark);
+    background: var(--cream);
+    border: 3px solid var(--wood-dark);
+    border-radius: 12px;
+    box-shadow: 0 4px 0 var(--wood-dark);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.expand-btn:disabled {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.expand-btn.ready {
+    background: var(--gold);
+    animation: expandWiggle 1.4s ease-in-out infinite;
+}
+
+.expand-btn:not(:disabled):active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 var(--wood-dark);
+}
+
+.expand-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.expand-hint {
+    font-size: 11px;
+    color: var(--wood);
+}
+
+.expand-btn.ready .expand-hint {
+    color: var(--wood-dark);
+}
+
+@keyframes expandWiggle {
+    0%, 60%, 100% { transform: rotate(0deg); }
+    10% { transform: rotate(-3deg); }
+    20% { transform: rotate(3deg); }
+    30% { transform: rotate(-2deg); }
+    40% { transform: rotate(0deg); }
+}
+
+/* ---------- 투자 시트 ---------- */
+
+.sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(90, 51, 16, 0.6);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.sheet-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.sheet {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 18px 24px;
+    background: var(--cream);
+    border: 5px solid var(--wood-dark);
+    border-bottom: none;
+    border-radius: 24px 24px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.25s ease-out;
+}
+
+.sheet-overlay.show .sheet {
+    transform: translateY(0);
+}
+
+.sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.sheet-header h2 {
+    font-size: 21px;
+}
+
+.sheet-cost {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--awning-red);
+    white-space: nowrap;
+}
+
+.sheet-summary {
+    font-size: 13px;
+    color: var(--wood);
+}
+
+.sheet-warning {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--awning-red);
+}
+
+.sheet-buildings {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+}
+
+.sheet-arrow {
+    padding-bottom: 20px;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.sheet-changes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.sheet-change {
+    padding: 8px 10px;
+    background: var(--awning-cream);
+    border: 2px solid var(--wood-light);
+    border-radius: 12px;
+}
+
+.sheet-change-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--awning-red);
+}
+
+.sheet-change-value {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.sheet-confirm,
+.sheet-cancel {
+    width: 100%;
+    min-width: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .sunburst,
     .bulb,
@@ -1365,6 +1534,7 @@ body.combo-bg-3 {
     .grid.combo-glow-2::after,
     .grid.combo-glow-3::after,
     .siren-active,
+    .expand-btn.ready,
     .cash-row.danger,
     .cost-line.cost-bump,
     .earning-float {

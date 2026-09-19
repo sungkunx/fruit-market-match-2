@@ -441,6 +441,155 @@ function updateStage() {
     return renderBuilding(document.getElementById('buildingSlot'), run.stage);
 }
 
+// "좌판으로", "매대로": 로 after a vowel or ㄹ, 으로 after any other final consonant.
+function withRo(word) {
+    const code = word.charCodeAt(word.length - 1) - 0xAC00;
+    const finalConsonant = code >= 0 && code < 11172 ? code % 28 : 0;
+    return word + (finalConsonant === 0 || finalConsonant === 8 ? '로' : '으로');
+}
+
+function updateExpandButton() {
+    const button = document.getElementById('expandBtn');
+    const cost = Economy.nextExpandCost(run, Tuning);
+    if (cost === null) {
+        button.hidden = true;
+        return;
+    }
+    button.hidden = false;
+
+    const isFinal = run.stage === Tuning.stages.length - 1;
+    const nextName = stageInfo(run.stage + 1).name;
+    document.getElementById('expandTitle').textContent = isFinal
+        ? `${nextName} 세우기 · ${formatMoney(cost)}`
+        : `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
+
+    const ready = gameRunning && Economy.canExpand(run, Tuning);
+    document.getElementById('expandHint').textContent = ready
+        ? (isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요')
+        : `수익 ${formatMoney(cost - Math.max(0, run.cash))} 더 필요`;
+    button.disabled = !ready;
+    button.classList.toggle('ready', ready);
+}
+
+function openExpandSheet() {
+    if (!canAcceptInput() || !Economy.canExpand(run, Tuning)) return;
+    sheetOpen = true;
+
+    const cost = Economy.nextExpandCost(run, Tuning);
+    const nextStage = run.stage + 1;
+    const current = stageInfo(run.stage);
+    const next = stageInfo(nextStage);
+    const isFinal = nextStage === Tuning.stages.length;
+    const cashAfter = run.cash - cost;
+    const nextRent = Economy.projectedRent(run, Tuning, nextStage);
+
+    document.getElementById('sheetTitle').textContent = isFinal
+        ? `${next.name}을 세울까요?`
+        : `${withRo(next.name)} 확장할까요?`;
+    document.getElementById('sheetCost').textContent = '−' + formatMoney(cost);
+    document.getElementById('sheetSummary').textContent = isFinal
+        ? `영업을 마치고 정산합니다. 점수 = 매출 + 건물 가치 ${formatMoney(cost)} + 남은 수익 × ${Tuning.clearCashMultiplier}`
+        : `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)}`;
+    document.getElementById('sheetWarning').hidden = isFinal || cashAfter >= nextRent * Tuning.dangerSeconds;
+
+    renderBuilding(document.getElementById('sheetFrom'), run.stage);
+    renderBuilding(document.getElementById('sheetTo'), nextStage);
+
+    const newFruit = Tuning.fruitOrder[next.fruits - 1];
+    const changes = isFinal
+        ? [['예상 점수', formatMoney(run.revenue + cost + cashAfter * Tuning.clearCashMultiplier)]]
+        : [
+            ['임대료', `${formatMoney(Economy.currentRent(run, Tuning))} → ${formatMoney(nextRent)} /초`],
+            ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
+            ['과일', next.fruits > current.fruits ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`]
+        ];
+    const list = document.getElementById('sheetChanges');
+    list.innerHTML = '';
+    changes.forEach(([label, value]) => {
+        const item = document.createElement('div');
+        item.className = 'sheet-change';
+        const labelElement = document.createElement('div');
+        labelElement.className = 'sheet-change-label';
+        labelElement.textContent = label;
+        const valueElement = document.createElement('div');
+        valueElement.className = 'sheet-change-value';
+        valueElement.textContent = value;
+        item.append(labelElement, valueElement);
+        list.appendChild(item);
+    });
+
+    document.getElementById('sheetConfirm').textContent = isFinal ? '세우고 영업 마치기' : '확장한다';
+    document.getElementById('expandSheet').classList.add('show');
+}
+
+function closeExpandSheet() {
+    sheetOpen = false;
+    document.getElementById('expandSheet').classList.remove('show');
+}
+
+async function confirmExpand() {
+    if (!sheetOpen) return;
+    closeExpandSheet();
+    if (!canAcceptInput() || !Economy.canExpand(run, Tuning)) return;
+
+    const session = gameSession;
+    const previousFruits = activeFruits;
+    isAnimating = true;
+    run = Economy.expand(run, Tuning);
+    GameAudio.playSuccess(3);
+    updateDashboard();
+
+    await showNewBuilding();
+    if (session !== gameSession) return;
+
+    if (run.ended === 'clear') {
+        await wait(600);
+        if (session !== gameSession) return;
+        isAnimating = false;
+        endRun();
+        return;
+    }
+
+    await growBoard(session);
+    if (session !== gameSession) return;
+
+    const newFruit = activeFruits.find(fruit => !previousFruits.includes(fruit));
+    if (newFruit) {
+        showComboEffect(`${FRUIT_NAMES[newFruit]} 입고!`);
+    }
+    isAnimating = false;
+    if (gameRunning && Economy.isBankrupt(run)) {
+        endRun();
+    }
+}
+
+async function showNewBuilding() {
+    const building = updateStage();
+    await animate(building, [
+        { transform: 'translateX(-50%) scale(0.6)', opacity: 0 },
+        { transform: 'translateX(-50%) scale(1.12)', opacity: 1, offset: 0.6 },
+        { transform: 'translateX(-50%) scale(1)', opacity: 1 }
+    ], { duration: 500, easing: 'ease-out' });
+}
+
+// Grows the board to the new stage's size; new cells drop in from above.
+async function growBoard(session) {
+    const info = stageInfo(run.stage);
+    activeFruits = fruitsForStage(run.stage);
+    const grown = Board.expandBoard(board, activeFruits, info.cols, info.rows, Math.random);
+    board = grown.board;
+    buildGrid(info.cols, info.rows);
+    renderBoard();
+
+    const pitch = cellPitch();
+    await Promise.all(grown.added.map(cell => animate(fruitWrapper(cell), [
+        { transform: `translateY(${-pitch}px) scale(0.4)`, opacity: 0 },
+        { transform: 'translateY(0px) scale(1)', opacity: 1 }
+    ], { duration: 350, delay: 40 * cell.col, easing: 'ease-out' })));
+    if (session !== gameSession) return;
+    grown.added.forEach(cell => clearAnimations(cell));
+}
+
 function updateDashboard() {
     if (!run) return;
     document.getElementById('revenue').textContent = formatMoney(run.revenue);
@@ -454,6 +603,7 @@ function updateDashboard() {
     updateMultiplier();
     updateDanger();
     updateBoardInfo();
+    updateExpandButton();
 }
 
 function updateCostLine() {
@@ -735,6 +885,7 @@ function restartGame() {
     // Hide game over screen and show start screen
     document.getElementById('gameOver').style.display = 'none';
     document.getElementById('pauseOverlay').classList.remove('show');
+    document.getElementById('expandSheet').classList.remove('show');
     document.getElementById('startScreen').style.display = 'flex';
     document.body.classList.add('on-start');
 
@@ -1137,12 +1288,16 @@ window.resetAndInitializeRankings = resetAndInitializeRankings;
 document.addEventListener('click', function(e) {
     const tutorialPopup = document.getElementById('tutorialPopup');
     const rankingPopup = document.getElementById('rankingPopup');
-    
+    const expandSheet = document.getElementById('expandSheet');
+
     if (e.target === tutorialPopup) {
         closeTutorial();
     }
     if (e.target === rankingPopup) {
         closeRanking();
+    }
+    if (e.target === expandSheet) {
+        closeExpandSheet();
     }
 });
 
@@ -1151,6 +1306,9 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeTutorial();
         closeRanking();
+        if (sheetOpen) {
+            closeExpandSheet();
+        }
     }
 });
 
