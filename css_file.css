@@ -994,13 +994,14 @@ body.combo-bg-3 {
     transform: translateX(-50%);
 }
 
-.building[data-stage="1"] { --w: 76; --h: 60; }
+/* Widths follow the proportions of img/building_N.png (the CSS drawing is the fallback) */
+.building[data-stage="1"] { --w: 66; --h: 60; }
 .building[data-stage="2"] { --w: 104; --h: 90; }
-.building[data-stage="3"] { --w: 132; --h: 130; }
-.building[data-stage="4"] { --w: 150; --h: 170; }
-.building[data-stage="5"] { --w: 188; --h: 210; }
-.building[data-stage="6"] { --w: 170; --h: 250; }
-.building[data-stage="7"] { --w: 190; --h: 300; }
+.building[data-stage="3"] { --w: 136; --h: 130; }
+.building[data-stage="4"] { --w: 210; --h: 170; }
+.building[data-stage="5"] { --w: 209; --h: 210; }
+.building[data-stage="6"] { --w: 168; --h: 250; }
+.building[data-stage="7"] { --w: 198; --h: 300; }
 
 .building-image {
     position: absolute;
