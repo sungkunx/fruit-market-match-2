@@ -233,3 +233,17 @@ test('a normal run is not a tutorial run and still goes bankrupt', () => {
     assert.equal(run.tutorial, false);
     assert.equal(Economy.isBankrupt(Economy.tick({ ...run, cash: 3 }, T, 1)), true);
 });
+
+test('a run starts outside overtime, can choose overtime, and leaves it by expanding', () => {
+    const run = Economy.createRun(T);
+    assert.equal(run.overtime, false);
+    const staying = Economy.stayOvertime({ ...run, cash: 1500 });
+    assert.equal(staying.overtime, true);
+    assert.equal(run.overtime, false);
+    assert.equal(Economy.expand(staying, T).overtime, false);
+});
+
+test('an ended run cannot go into overtime', () => {
+    const run = { ...Economy.createRun(T), ended: 'bankrupt' };
+    assert.equal(Economy.stayOvertime(run), run);
+});

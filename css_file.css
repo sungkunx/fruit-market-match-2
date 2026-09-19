@@ -1485,6 +1485,13 @@ body.combo-bg-3 {
     color: var(--wood);
 }
 
+.sheet-note {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--awning-red);
+    text-align: center;
+}
+
 .sheet-buildings {
     display: flex;
     align-items: flex-end;

@@ -33,6 +33,7 @@ let sheetOpen = false;
 let hiddenPause = false;
 let expanding = false;
 let stageCardOpen = false;
+let offeredStage = 0; // the stage whose expansion offer already popped up
 const TUTORIAL_KEY = 'fruitMarketTutorialDone';
 const PRACTICE_LINES = {
     1: '과일을 밀어 같은 과일 3개를 한 줄로 맞춰 보세요',
@@ -608,6 +609,9 @@ function updateExpandButton() {
     let hint = isFinal ? `수익 ${shortfall} 더 필요` : `준비금 포함 ${shortfall} 더 필요`;
     if (ready) {
         hint = isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요';
+        if (run.overtime) {
+            hint = '연장전 · 아이템 없이 점수만';
+        }
     }
     document.getElementById('expandHint').textContent = hint;
     button.disabled = !ready;
@@ -668,6 +672,8 @@ function openExpandSheet() {
     });
 
     document.getElementById('sheetConfirm').textContent = isFinal ? '세우고 영업 마치기' : '확장한다';
+    document.getElementById('sheetNote').hidden = run.tutorial;
+    document.getElementById('sheetCancel').textContent = run.tutorial ? '조금 더 벌고 올게요' : '좀 더 할게요 · 점수만';
     document.getElementById('expandSheet').classList.add('show');
 }
 
@@ -717,6 +723,24 @@ function closeStageCard() {
 function closeExpandSheet() {
     sheetOpen = false;
     document.getElementById('expandSheet').classList.remove('show');
+}
+
+// Opens the expand sheet by itself the first time the shop can grow at this stage.
+function offerExpansion() {
+    if (run.tutorial || offeredStage === run.stage) return;
+    if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
+    offeredStage = run.stage;
+    openExpandSheet();
+}
+
+// Closing the sheet without expanding means playing on: overtime at this stage.
+function declineExpansion() {
+    if (!sheetOpen) return;
+    closeExpandSheet();
+    if (gameRunning && !run.tutorial) {
+        run = Economy.stayOvertime(run);
+        updateDashboard();
+    }
 }
 
 async function confirmExpand() {
@@ -914,6 +938,7 @@ function onTick() {
     if (!isAnimating && Economy.isBankrupt(run)) {
         endRun();
     }
+    offerExpansion();
 }
 
 function startLoop() {
@@ -1180,6 +1205,7 @@ function actuallyStartGame(practiceMode = false) {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
+    offeredStage = 0;
     practiceDoneOpen = false;
     practiceStep = 0;
     pointerStart = null;
@@ -1216,6 +1242,7 @@ function restartGame() {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
+    offeredStage = 0;
     practiceDoneOpen = false;
     practiceStep = 0;
     clearHint();
@@ -1644,7 +1671,7 @@ document.addEventListener('click', function(e) {
         closeRanking();
     }
     if (e.target === expandSheet) {
-        closeExpandSheet();
+        declineExpansion();
     }
     if (e.target === document.getElementById('stageCard')) {
         closeStageCard();
@@ -1657,7 +1684,7 @@ document.addEventListener('keydown', function(e) {
         closeTutorial();
         closeRanking();
         if (sheetOpen) {
-            closeExpandSheet();
+            declineExpansion();
         }
         if (stageCardOpen) {
             closeStageCard();

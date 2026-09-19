@@ -28,6 +28,8 @@
             ended: null,
             // A practice (tutorial) run never goes bankrupt and never shows danger.
             tutorial: Boolean(options.tutorial),
+            // Chose to keep playing past an expansion offer: score only, no board items at this stage.
+            overtime: false,
             // Room for phase 2 cards (e.g. rent: 0.8 for -20% rent). Phase 1 keeps them at 1.
             modifiers: { rent: 1, labor: 1, logistics: 1, revenue: 1 }
         };
@@ -141,8 +143,14 @@
             cash: state.cash - nextExpandCost(state, tuning),
             stage,
             stageTime: 0,
+            overtime: false,
             ended: stage === tuning.stages.length ? 'clear' : null
         };
+    }
+
+    // Closing the expansion offer without expanding: keep playing this stage for score only.
+    function stayOvertime(state) {
+        return state.ended ? state : { ...state, overtime: true };
     }
 
     function isBankrupt(state) {
@@ -184,6 +192,7 @@
         expandRequirement,
         canExpand,
         expand,
+        stayOvertime,
         isBankrupt,
         bankrupt,
         isInDanger,
