@@ -31,6 +31,16 @@ let score = 0; // final score of the last finished run
 let lastScore = 0;
 let highestScore = 0;
 const missingBuildingImages = new Set();
+const missingCustomerImages = new Set();
+const CUSTOMER_SKINS = ['var(--skin-light)', 'var(--skin-tan)'];
+const CUSTOMER_SHIRTS = ['var(--awning-red)', 'var(--leaf)', 'var(--store-blue)', 'var(--violet)', 'var(--gold)', 'var(--sunset)'];
+const CUSTOMER_IMAGE_COUNT = 4;
+const CUSTOMER_EDGE_X = 220; // px from the door where customers enter and leave
+const CUSTOMER_WALK_MS = 600;
+const CROWD_UPDATE_SECONDS = 0.5;
+let crowd = Crowd.createCrowd();
+let customers = []; // oldest first: { element, x }
+let crowdClock = 0;
 
 const BULB_COUNT = 12;
 const CONFETTI_COUNT = 24;
@@ -372,6 +382,8 @@ async function playSteps(steps, stepScores, session) {
         if (session !== gameSession) return false;
 
         run = Economy.addEarnings(run, stepScores[i]);
+        crowd = Crowd.recordEarning(crowd, stepScores[i], run.time, Tuning.crowdWindowSeconds);
+        addCustomer();
         showEarning(stepScores[i]);
         updateDashboard();
         if (step.chain >= 2) {
@@ -402,8 +414,116 @@ function showEarning(amount) {
     const label = document.createElement('div');
     label.className = 'earning-float';
     label.textContent = '+' + formatMoney(amount);
+
     document.getElementById('boardFrame').appendChild(label);
     setTimeout(() => label.remove(), 900);
+}
+
+function pickRandom(list) {
+    return list[Math.floor(Math.random() * list.length)];
+}
+
+// Queue spot for the customer at `index`: alternating left and right of the door.
+function customerSpot(index) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const rank = Math.floor(index / 2) + 1;
+    return { x: side * (4 + rank * 18), scale: 1 - rank * 0.03, layer: 20 - rank };
+}
+
+function layoutCustomers() {
+    customers.forEach((customer, index) => {
+        const spot = customerSpot(index);
+        customer.x = spot.x;
+        customer.element.style.transform = `translateX(${spot.x}px) scale(${spot.scale})`;
+        customer.element.style.zIndex = String(spot.layer);
+    });
+}
+
+// A CSS-drawn customer. Uses img/customer_N.png when it exists.
+function createCustomerElement() {
+    const element = document.createElement('div');
+    element.className = 'customer walking';
+
+    const art = document.createElement('div');
+    art.className = 'customer-art';
+    art.style.setProperty('--skin', pickRandom(CUSTOMER_SKINS));
+    art.style.setProperty('--shirt', pickRandom(CUSTOMER_SHIRTS));
+    element.appendChild(art);
+
+    const imageNumber = 1 + Math.floor(Math.random() * CUSTOMER_IMAGE_COUNT);
+    if (!missingCustomerImages.has(imageNumber)) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.draggable = false;
+        img.addEventListener('load', () => element.classList.add('has-image'));
+        img.addEventListener('error', () => {
+            missingCustomerImages.add(imageNumber);
+            img.remove();
+        });
+        img.src = `img/customer_${imageNumber}.png`;
+        element.appendChild(img);
+    }
+    return element;
+}
+
+// A customer walks in from the nearer edge and joins the queue.
+function addCustomer() {
+    if (customers.length >= Tuning.crowdMax) return;
+    const element = createCustomerElement();
+    const entryX = customerSpot(customers.length).x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
+    element.style.transform = `translateX(${entryX}px)`;
+    document.getElementById('crowd').appendChild(element);
+    customers.push({ element, x: entryX });
+    void element.offsetWidth; // start the walk from the edge
+    layoutCustomers();
+    setTimeout(() => element.classList.remove('walking'), CUSTOMER_WALK_MS);
+}
+
+// The customer who has waited longest walks off; the rest step closer to the door.
+function removeOldestCustomer() {
+    const customer = customers.shift();
+    if (!customer) return;
+    const exitX = customer.x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
+    customer.element.classList.add('walking');
+    customer.element.style.transform = `translateX(${exitX}px)`;
+    customer.element.style.opacity = '0';
+    setTimeout(() => customer.element.remove(), CUSTOMER_WALK_MS);
+    layoutCustomers();
+}
+
+function sendCustomersHome() {
+    while (customers.length > 0) {
+        removeOldestCustomer();
+    }
+}
+
+function clearCustomers() {
+    customers = [];
+    document.getElementById('crowd').innerHTML = '';
+}
+
+function hopRandomCustomer() {
+    const chance = run.combo.multiplier >= 2 ? 0.5 : 0.2;
+    if (customers.length === 0 || Math.random() >= chance) return;
+    const element = pickRandom(customers).element;
+    if (element.classList.contains('walking')) return;
+    element.classList.remove('hop');
+    void element.offsetWidth; // restart the CSS animation
+    element.classList.add('hop');
+}
+
+// Walks customers in or out toward the size the recent earning pace calls for.
+function updateCrowd() {
+    const pace = Crowd.earningPace(crowd, run.time, Tuning.crowdWindowSeconds);
+    const target = Crowd.targetCrowdSize(pace, Economy.currentRent(run, Tuning), Tuning);
+    if (customers.length > target) {
+        removeOldestCustomer();
+    } else {
+        while (customers.length < target) {
+            addCustomer();
+        }
+    }
+    hopRandomCustomer();
 }
 
 // Draws the building for `stage` into `container`. Uses img/building_N.png when it exists.
@@ -709,6 +829,11 @@ function onTick() {
     if (!gameRunning || isPaused()) return;
     run = Economy.tick(run, Tuning, TICK_SECONDS);
     updateDashboard();
+    crowdClock += TICK_SECONDS;
+    if (crowdClock >= CROWD_UPDATE_SECONDS - 1e-9) {
+        crowdClock = 0;
+        updateCrowd();
+    }
     if (!isAnimating && Economy.isBankrupt(run)) {
         endRun();
     }
@@ -727,6 +852,7 @@ function endRun() {
     run = Economy.bankrupt(run); // keeps a clear as a clear
     score = Economy.finalScore(run, Tuning);
     updateDashboard();
+    sendCustomersHome();
     GameAudio.stopMusic();
 
     showResult();
@@ -892,6 +1018,9 @@ function actuallyStartGame() {
     comboLevel = -1; // forces the first update to set the effects
     shownRent = 0;
     dangerShown = false;
+    crowd = Crowd.createCrowd();
+    crowdClock = 0;
+    clearCustomers();
 
     newBoard(run.stage);
     updateStage();
@@ -921,6 +1050,7 @@ function restartGame() {
 
     comboLevel = 0;
     setComboEffects(0);
+    clearCustomers();
 
     // Hide game over screen and show start screen
     document.getElementById('gameOver').style.display = 'none';
