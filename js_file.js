@@ -1,29 +1,35 @@
-const ALL_FRUITS = ['apple', 'orange', 'banana', 'grape', 'strawberry', 'kiwi', 'cherry'];
-const FRUITS_PER_GAME = 6;
-const GAME_DURATION = 30;
-const LEADERBOARD_MIN_SCORE = 5000;
 const SWIPE_THRESHOLD = 0.3; // fraction of a cell the finger must travel to count as a swipe
-const TIMER_TICK_MS = 100;
-const HURRY_TIME = 5; // seconds left when the warning and the faster music start
+const TICK_MS = 100;
+const TICK_SECONDS = TICK_MS / 1000;
+const FRUIT_NAMES = {
+    apple: '사과',
+    banana: '바나나',
+    grape: '포도',
+    kiwi: '키위',
+    orange: '오렌지',
+    strawberry: '딸기',
+    cherry: '체리'
+};
 
+let run = null;
 let board = [];
 let activeFruits = [];
 let cellElements = [];
-let score = 0;
-let multiplier = 1.0;
-let timeLeft = GAME_DURATION;
 let gameRunning = false;
-let timerInterval;
-let lastMatchedFruit = null;
-let comboCount = 0;
-let lastScore = 0;
-let maxMultiplier = 1.0;
-let highestScore = 0;
 let isAnimating = false;
-let timeUp = false;
+let sheetOpen = false;
+let hiddenPause = false;
+let loopInterval;
 let gameSession = 0;
 let pointerStart = null;
 let comboTextTimer;
+let comboLevel = 0;
+let shownRent = 0;
+let dangerShown = false;
+let score = 0; // final score of the last finished run
+let lastScore = 0;
+let highestScore = 0;
+const missingBuildingImages = new Set();
 
 const BULB_COUNT = 12;
 const CONFETTI_COUNT = 24;
@@ -65,20 +71,34 @@ function toggleSound() {
     updateSoundButtons();
 }
 
+function formatMoney(value) {
+    return Math.floor(value).toLocaleString('ko-KR');
+}
+
+function stageInfo(stage) {
+    return Tuning.stages[stage - 1];
+}
+
+function fruitsForStage(stage) {
+    return Tuning.fruitOrder.slice(0, stageInfo(stage).fruits);
+}
+
 function fruitSrc(fruit, frame) {
     return `img/fruit_${fruit}_${frame}.png`;
 }
 
-// Builds the 8x7 cell elements once. Each cell holds a .fruit wrapper (moved by
-// animations) around the fruit image (which keeps its idle CSS animation).
-function buildGrid() {
+// Builds the cell elements for a cols x rows board. Each cell holds a .fruit wrapper
+// (moved by animations) around the fruit image (which keeps its idle CSS animation).
+function buildGrid(cols, rows) {
     const gridElement = document.getElementById('grid');
     gridElement.innerHTML = '';
+    gridElement.style.setProperty('--cols', cols);
+    gridElement.style.setProperty('--rows', rows);
     cellElements = [];
 
-    for (let row = 0; row < Board.ROWS; row++) {
+    for (let row = 0; row < rows; row++) {
         const rowElements = [];
-        for (let col = 0; col < Board.COLS; col++) {
+        for (let col = 0; col < cols; col++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
             cell.dataset.row = row;
@@ -127,8 +147,8 @@ function clearAnimations(cell) {
 }
 
 function renderBoard() {
-    for (let row = 0; row < Board.ROWS; row++) {
-        for (let col = 0; col < Board.COLS; col++) {
+    for (let row = 0; row < board.length; row++) {
+        for (let col = 0; col < board[0].length; col++) {
             const cell = { row, col };
             clearAnimations(cell);
             setCellFruit(cell, board[row][col]);
@@ -136,9 +156,11 @@ function renderBoard() {
     }
 }
 
-function newBoard() {
-    activeFruits = Board.pickFruits(Math.random, ALL_FRUITS, FRUITS_PER_GAME);
-    board = Board.createBoard(Math.random, activeFruits);
+function newBoard(stage) {
+    const info = stageInfo(stage);
+    activeFruits = fruitsForStage(stage);
+    board = Board.createBoard(Math.random, activeFruits, info.cols, info.rows);
+    buildGrid(info.cols, info.rows);
     renderBoard();
 }
 
@@ -149,9 +171,9 @@ function animate(element, keyframes, options) {
     return element.animate(keyframes, { fill: 'forwards', ...options }).finished.catch(() => {});
 }
 
-// Distance in layout pixels between neighboring cells (cells are square).
+// Distance in layout pixels between neighboring cells (cells are square, boards are at least 5 wide).
 function cellPitch() {
-    return (cellElements[0][Board.COLS - 1].offsetLeft - cellElements[0][0].offsetLeft) / (Board.COLS - 1);
+    return cellElements[0][1].offsetLeft - cellElements[0][0].offsetLeft;
 }
 
 function animateSwap(a, b, reverse = false) {
@@ -229,8 +251,12 @@ function showFailedExpression(cells) {
     }, 500);
 }
 
+function isPaused() {
+    return sheetOpen || hiddenPause;
+}
+
 function canAcceptInput() {
-    return gameRunning && !isAnimating && !timeUp;
+    return gameRunning && !isAnimating && !isPaused();
 }
 
 function cellFromEvent(event) {
@@ -266,7 +292,7 @@ function onGridPointerMove(event) {
         : { row: from.row + Math.sign(dy), col: from.col };
     pointerStart = null;
 
-    if (to.row < 0 || to.row >= Board.ROWS || to.col < 0 || to.col >= Board.COLS) {
+    if (to.row < 0 || to.row >= board.length || to.col < 0 || to.col >= board[0].length) {
         setCellFrame(from, '001');
         return;
     }
@@ -296,6 +322,8 @@ async function handleSwap(a, b) {
     const session = gameSession;
     const movedFruit = board[a.row][a.col];
     const displacedFruit = board[b.row][b.col];
+    run = Economy.chargeSwap(run, Tuning);
+    updateDashboard();
     const result = Board.resolveMove(board, a, b, Math.random, activeFruits);
 
     await animateSwap(a, b);
@@ -317,25 +345,24 @@ async function handleSwap(a, b) {
     clearAnimations(a);
     clearAnimations(b);
 
-    const scored = Scoring.scoreMove(result, { multiplier, comboCount, lastMatchedFruit }, movedFruit, displacedFruit);
+    const scored = Economy.scoreMove(run, Tuning, result, movedFruit, displacedFruit);
     const completed = await playSteps(result.steps, scored.stepScores, session);
     if (!completed) return;
 
     board = result.finalBoard;
-    multiplier = scored.state.multiplier;
-    comboCount = scored.state.comboCount;
-    lastMatchedFruit = scored.state.lastMatchedFruit;
-    maxMultiplier = Math.max(maxMultiplier, multiplier);
+    run = Economy.finishMove(run, scored, result.steps.length);
     if (scored.isCombo) {
-        showComboEffect(`COMBO x${comboCount}! +0.5x`);
+        showComboEffect(`COMBO x${run.combo.comboCount}!`);
     }
-    updateDisplay();
+    pulseMultiplier();
+    updateDashboard();
     updateComboDisplay();
 
     await finishTurn(session);
 }
 
-// Plays each pop-and-fall step in order. Returns false if the game was left midway.
+// Plays each pop-and-fall step in order and pays out as it goes.
+// Returns false if the game was left midway.
 async function playSteps(steps, stepScores, session) {
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
@@ -343,13 +370,10 @@ async function playSteps(steps, stepScores, session) {
         await animatePop(step.cleared);
         if (session !== gameSession) return false;
 
-        score += stepScores[i];
-        updateScoreDisplay();
-        const secondsAdded = addTime(Scoring.stepTimeBonus(step));
-        if (secondsAdded > 0) {
-            showTimeBonus(secondsAdded);
-        }
-        if (step.kind === 'match' && step.chain >= 2) {
+        run = Economy.addEarnings(run, stepScores[i]);
+        showEarning(stepScores[i]);
+        updateDashboard();
+        if (step.chain >= 2) {
             showComboEffect(`CHAIN x${step.chain}!`);
         }
 
@@ -359,6 +383,7 @@ async function playSteps(steps, stepScores, session) {
     return true;
 }
 
+// Ends the move. Rent that ran out during the animation only counts once the move has paid.
 async function finishTurn(session) {
     if (!Board.hasPossibleMove(board)) {
         showComboEffect('Shuffle!');
@@ -366,55 +391,147 @@ async function finishTurn(session) {
         if (session !== gameSession) return;
     }
     isAnimating = false;
-    if (timeUp) {
-        endGame();
+    if (gameRunning && Economy.isBankrupt(run)) {
+        endRun();
     }
 }
 
-function updateScoreDisplay() {
-    document.getElementById('score').textContent = score;
+function showEarning(amount) {
+    if (amount <= 0) return;
+    const label = document.createElement('div');
+    label.className = 'earning-float';
+    label.textContent = '+' + formatMoney(amount);
+    document.getElementById('boardFrame').appendChild(label);
+    setTimeout(() => label.remove(), 900);
 }
 
-function updateDisplay() {
-    updateScoreDisplay();
-    const multiplierElement = document.getElementById('multiplier');
-    multiplierElement.textContent = `x${multiplier.toFixed(1)}`;
-    
-    // Update background and grid effects based on multiplier
-    updateComboEffects();
-    
-    // Fancy effect when multiplier increases
-    if (multiplier > 1.0) {
-        multiplierElement.classList.add('multiplier-boost');
-        setTimeout(() => {
-            multiplierElement.classList.remove('multiplier-boost');
-        }, 800);
+// Draws the building for `stage` into `container`. Uses img/building_N.png when it exists.
+function renderBuilding(container, stage) {
+    container.innerHTML = '';
+    const building = document.createElement('div');
+    building.className = 'building';
+    building.dataset.stage = stage;
+
+    const art = document.createElement('div');
+    art.className = 'building-art';
+    building.appendChild(art);
+
+    if (!missingBuildingImages.has(stage)) {
+        const img = document.createElement('img');
+        img.className = 'building-image';
+        img.alt = '';
+        img.draggable = false;
+        img.addEventListener('load', () => building.classList.add('has-image'));
+        img.addEventListener('error', () => {
+            missingBuildingImages.add(stage);
+            img.remove();
+        });
+        img.src = `img/building_${stage}.png`;
+        building.appendChild(img);
+    }
+
+    container.appendChild(building);
+    return building;
+}
+
+function updateStage() {
+    const info = stageInfo(run.stage);
+    document.getElementById('stageNumber').textContent = `${run.stage}단계`;
+    document.getElementById('stageName').textContent = info.name;
+    return renderBuilding(document.getElementById('buildingSlot'), run.stage);
+}
+
+function updateDashboard() {
+    if (!run) return;
+    document.getElementById('revenue').textContent = formatMoney(run.revenue);
+    document.getElementById('cash').textContent = formatMoney(Math.max(0, run.cash));
+
+    const cost = Economy.nextExpandCost(run, Tuning);
+    const ratio = cost ? Math.min(1, Math.max(0, run.cash) / cost) : 1;
+    document.getElementById('cashBar').style.width = (ratio * 100).toFixed(1) + '%';
+
+    updateCostLine();
+    updateMultiplier();
+    updateDanger();
+    updateBoardInfo();
+}
+
+function updateCostLine() {
+    const rent = Math.round(Economy.currentRent(run, Tuning));
+    const labor = Tuning.laborPerSwap * run.modifiers.labor;
+    const logistics = Math.round(Economy.currentLogistics(run, Tuning));
+    const line = document.getElementById('costLine');
+    line.textContent = `임대료 −${formatMoney(rent)}/초 · 인건비 −${formatMoney(labor)}/스왑 · 물류비 −${formatMoney(logistics)}/${Tuning.logisticsInterval}초`;
+
+    if (shownRent > 0 && rent > shownRent) {
+        line.classList.remove('cost-bump');
+        void line.offsetWidth; // restart the CSS animation
+        line.classList.add('cost-bump');
+    }
+    shownRent = rent;
+}
+
+function updateMultiplier() {
+    const multiplier = run.combo.multiplier;
+    document.getElementById('multiplier').textContent = `x${multiplier.toFixed(1)}`;
+    const level = multiplier >= 3 ? 3 : multiplier >= 2 ? 2 : multiplier >= 1.5 ? 1 : 0;
+    if (level !== comboLevel) {
+        comboLevel = level;
+        setComboEffects(level);
     }
 }
 
-function updateComboEffects() {
+function setComboEffects(level) {
     const body = document.body;
     const grid = document.getElementById('grid');
-    
-    // Remove all combo classes
     body.classList.remove('combo-bg-1', 'combo-bg-2', 'combo-bg-3');
     grid.classList.remove('combo-glow-1', 'combo-glow-2', 'combo-glow-3');
-    
-    // Add combo effects based on multiplier level
-    if (multiplier >= 3.0) {
-        body.classList.add('combo-bg-3');
-        grid.classList.add('combo-glow-3');
-        GameAudio.setIntensity(3);
-    } else if (multiplier >= 2.0) {
-        body.classList.add('combo-bg-2');
-        grid.classList.add('combo-glow-2');
-        GameAudio.setIntensity(2);
-    } else if (multiplier >= 1.5) {
-        body.classList.add('combo-bg-1');
-        grid.classList.add('combo-glow-1');
-        GameAudio.setIntensity(1);
+    if (level > 0) {
+        body.classList.add(`combo-bg-${level}`);
+        grid.classList.add(`combo-glow-${level}`);
+    }
+    GameAudio.setIntensity(level);
+}
+
+function pulseMultiplier() {
+    const multiplierElement = document.getElementById('multiplier');
+    multiplierElement.classList.add('multiplier-boost');
+    setTimeout(() => multiplierElement.classList.remove('multiplier-boost'), 800);
+}
+
+function updateDanger() {
+    const danger = gameRunning && Economy.isInDanger(run, Tuning);
+    document.getElementById('cashRow').classList.toggle('danger', danger);
+    if (danger === dangerShown) return;
+    dangerShown = danger;
+    document.getElementById('sirenWarning').classList.toggle('siren-active', danger);
+    GameAudio.setHurry(danger);
+}
+
+function updateBoardInfo() {
+    const info = stageInfo(run.stage);
+    const inflationPercent = Math.round((Economy.inflation(run, Tuning) - 1) * 100);
+    let text = `진열대 ${info.cols}×${info.rows} · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
+    const surchargePercent = Math.round((Economy.surcharge(run, Tuning) - 1) * 100);
+    if (surchargePercent > 0) {
+        text += ` · 백화점 할증 +${surchargePercent}%`;
+    }
+    document.getElementById('boardInfo').textContent = text;
+}
+
+function updateComboDisplay() {
+    const comboElement = document.getElementById('comboCounter');
+    const comboCount = run ? run.combo.comboCount : 0;
+    comboElement.textContent = comboCount;
+
+    // Add glow effect when combo is active
+    if (comboCount > 1) {
+        comboElement.classList.add('combo-active');
+        setTimeout(() => {
+            comboElement.classList.remove('combo-active');
+        }, 800);
     } else {
-        GameAudio.setIntensity(0);
+        comboElement.classList.remove('combo-active');
     }
 }
 
@@ -431,82 +548,45 @@ function showComboEffect(text) {
     }, 1500);
 }
 
-function round1(value) {
-    return Math.round(value * 10) / 10;
+// Game time only moves while nothing is paused. Bankruptcy waits for the move on screen.
+function onTick() {
+    if (!gameRunning || isPaused()) return;
+    run = Economy.tick(run, Tuning, TICK_SECONDS);
+    updateDashboard();
+    if (!isAnimating && Economy.isBankrupt(run)) {
+        endRun();
+    }
 }
 
-function updateTimerBar() {
-    const ratio = timeLeft / GAME_DURATION;
-    const timerBar = document.getElementById('timerBar');
-    timerBar.style.width = ratio * 100 + '%';
-    timerBar.classList.toggle('time-mid', ratio <= 0.5 && ratio > 0.25);
-    timerBar.classList.toggle('time-low', ratio <= 0.25);
+function startLoop() {
+    clearInterval(loopInterval);
+    loopInterval = setInterval(onTick, TICK_MS);
 }
 
-// The warning follows the clock both ways: time bonuses can push it back above 5s.
-function updateHurryState() {
-    const hurrying = timeLeft <= HURRY_TIME && timeLeft > 0;
-    document.getElementById('sirenWarning').classList.toggle('siren-active', hurrying);
-    GameAudio.setHurry(hurrying);
-}
-
-function startTimer() {
-    timerInterval = setInterval(() => {
-        timeLeft = Math.max(0, round1(timeLeft - TIMER_TICK_MS / 1000));
-        updateTimerBar();
-        updateHurryState();
-
-        if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            if (isAnimating) {
-                // Let the running move and its chain finish, then finishTurn() ends the game
-                timeUp = true;
-            } else {
-                endGame();
-            }
-        }
-    }, TIMER_TICK_MS);
-}
-
-// Gives seconds back for a match, never past the starting time.
-// Returns how many seconds were actually added.
-function addTime(seconds) {
-    if (!gameRunning || timeUp || timeLeft <= 0 || seconds <= 0) return 0;
-
-    const next = Math.min(GAME_DURATION, round1(timeLeft + seconds));
-    const added = round1(next - timeLeft);
-    timeLeft = next;
-    updateTimerBar();
-    updateHurryState();
-    return added;
-}
-
-function showTimeBonus(seconds) {
-    const timerContainer = document.querySelector('.timer-container');
-    const label = document.createElement('div');
-    label.className = 'time-bonus';
-    label.textContent = `+${seconds}s`;
-    label.style.top = timerContainer.offsetTop + 'px';
-    document.querySelector('.game-container').appendChild(label);
-    setTimeout(() => label.remove(), 800);
-
-    const timerBar = document.getElementById('timerBar');
-    timerBar.classList.remove('timer-flash');
-    void timerBar.offsetWidth; // restart the flash animation
-    timerBar.classList.add('timer-flash');
-}
-
-function endGame() {
+function endRun() {
+    if (!gameRunning) return;
     gameRunning = false;
-    clearInterval(timerInterval);
-    document.getElementById('sirenWarning').classList.remove('siren-active');
-    document.getElementById('finalScore').textContent = score;
-    
-    // Check if this is a new personal best score (worth submitting to leaderboard)
+    clearInterval(loopInterval);
+    run = Economy.bankrupt(run); // keeps a clear as a clear
+    score = Economy.finalScore(run, Tuning);
+    updateDashboard();
+    GameAudio.stopMusic();
+
+    showResult();
+
+    lastScore = score;
+    if (score > highestScore) {
+        highestScore = score;
+    }
+    saveGameData();
+    updateStartScreenStats();
+}
+
+// Basic result popup. Task 7 replaces this with the full result screen.
+function showResult() {
+    document.getElementById('finalScore').textContent = formatMoney(score);
     const isNewPersonalBest = score > highestScore;
-    const meetsMinimumThreshold = score >= LEADERBOARD_MIN_SCORE;
-    
-    // Show ranking submission only if it's both a new personal best AND meets minimum threshold
+    const meetsMinimumThreshold = score >= Tuning.leaderboardMinScore;
     if (isNewPersonalBest && meetsMinimumThreshold) {
         document.getElementById('scoreSubmit').style.display = 'block';
         document.getElementById('playAgainBtn').style.display = 'none';
@@ -514,38 +594,38 @@ function endGame() {
         document.getElementById('scoreSubmit').style.display = 'none';
         document.getElementById('playAgainBtn').style.display = 'block';
     }
-    
     document.getElementById('gameOver').style.display = 'flex';
-    
-    // Update last score and save data
-    lastScore = score;
-    if (score > highestScore) {
-        highestScore = score;
-    }
-    saveGameData();
-    updateStartScreenStats();
-    
-    GameAudio.stopMusic();
+}
+
+function pauseForHidden() {
+    if (!gameRunning || hiddenPause) return;
+    hiddenPause = true;
+    document.getElementById('pauseOverlay').classList.add('show');
+}
+
+function resumeGame() {
+    hiddenPause = false;
+    document.getElementById('pauseOverlay').classList.remove('show');
 }
 
 // Submit score to Firebase
 async function submitScore() {
     const playerName = document.getElementById('playerNameInput').value.trim();
-    
+
     if (!playerName) {
         alert('Please enter your name!');
         return;
     }
-    
+
     // Show loading state
     const submitBtn = document.querySelector('.submit-score-btn');
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<span class="btn-icon">⏳</span>Submitting...';
     submitBtn.disabled = true;
-    
+
     try {
         const success = await submitScoreToFirebase(playerName, score);
-        
+
         if (success) {
             alert('Successfully added to leaderboard! 🎉');
         } else {
@@ -555,11 +635,11 @@ async function submitScore() {
         alert('An error occurred while submitting your score.');
         console.error('Submit score error:', error);
     }
-    
+
     // Reset button state
     submitBtn.innerHTML = originalText;
     submitBtn.disabled = false;
-    
+
     // Hide submit form and show play again button
     hideSubmitForm();
 }
@@ -578,7 +658,7 @@ function hideSubmitForm() {
 function startGame() {
     // Initialize audio (after user gesture)
     GameAudio.init();
-    
+
     // Hide start screen
     document.getElementById('startScreen').style.display = 'none';
     document.body.classList.remove('on-start');
@@ -590,21 +670,21 @@ function startGame() {
 function showCountdown() {
     const countdownOverlay = document.getElementById('countdownOverlay');
     const countdownText = document.getElementById('countdownText');
-    
+
     // Show countdown overlay
     countdownOverlay.classList.add('show');
-    
+
     // Start with "Ready"
     countdownText.textContent = 'Ready';
     countdownText.className = 'countdown-text ready';
     countdownText.style.animation = 'countdownPulse 1s ease-out';
-    
+
     setTimeout(() => {
         // Change to "START!"
         countdownText.textContent = 'START!';
         countdownText.className = 'countdown-text start';
         countdownText.style.animation = 'countdownPulse 1s ease-out';
-        
+
         setTimeout(() => {
             // Hide countdown and start game
             countdownOverlay.classList.remove('show');
@@ -615,28 +695,24 @@ function showCountdown() {
 
 function actuallyStartGame() {
     gameSession++;
-    score = 0;
-    multiplier = 1.0;
-    maxMultiplier = 1.0; // Reset max multiplier for new game
-    timeLeft = GAME_DURATION;
+    run = Economy.createRun(Tuning);
     gameRunning = true;
     isAnimating = false;
-    timeUp = false;
+    sheetOpen = false;
+    hiddenPause = false;
     pointerStart = null;
-    lastMatchedFruit = null;
-    comboCount = 0;
+    comboLevel = -1; // forces the first update to set the effects
+    shownRent = 0;
+    dangerShown = false;
 
-    newBoard();
-    updateDisplay();
+    newBoard(run.stage);
+    updateStage();
+    updateDashboard();
     updateComboDisplay();
-    GameAudio.setIntensity(0);
     GameAudio.setHurry(false);
-    
-    updateTimerBar();
-    updateHurryState();
 
     GameAudio.startMusic();
-    startTimer();
+    startLoop();
 }
 
 function restartGame() {
@@ -644,28 +720,21 @@ function restartGame() {
     gameRunning = false;
     gameSession++;
     isAnimating = false;
-    timeUp = false;
+    sheetOpen = false;
+    hiddenPause = false;
     pointerStart = null;
-    clearInterval(timerInterval);
-    
+    clearInterval(loopInterval);
+
     GameAudio.stopMusic();
-    
-    // Reset game state
-    score = 0;
-    multiplier = 1.0;
-    maxMultiplier = 1.0;
-    timeLeft = GAME_DURATION;
-    lastMatchedFruit = null;
-    comboCount = 0;
-    
-    // Reset combo effects
-    const body = document.body;
-    const grid = document.getElementById('grid');
-    body.classList.remove('combo-bg-1', 'combo-bg-2', 'combo-bg-3');
-    grid.classList.remove('combo-glow-1', 'combo-glow-2', 'combo-glow-3');
-    
+    GameAudio.setHurry(false);
+    dangerShown = false;
+
+    comboLevel = 0;
+    setComboEffects(0);
+
     // Hide game over screen and show start screen
     document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('pauseOverlay').classList.remove('show');
     document.getElementById('startScreen').style.display = 'flex';
     document.body.classList.add('on-start');
 
@@ -708,21 +777,6 @@ function loadGameData() {
 function updateStartScreenStats() {
     document.getElementById('lastScore').textContent = lastScore;
     document.getElementById('highestScore').textContent = highestScore;
-}
-
-function updateComboDisplay() {
-    const comboElement = document.getElementById('comboCounter');
-    comboElement.textContent = comboCount;
-    
-    // Add glow effect when combo is active
-    if (comboCount > 1) {
-        comboElement.classList.add('combo-active');
-        setTimeout(() => {
-            comboElement.classList.remove('combo-active');
-        }, 800);
-    } else {
-        comboElement.classList.remove('combo-active');
-    }
 }
 
 // Initialize title fruit animations
@@ -1102,15 +1156,16 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('visibilitychange', () => {
     GameAudio.setPageHidden(document.hidden);
+    if (document.hidden) {
+        pauseForHidden();
+    }
 });
 
 // Initialize
 loadGameData();
 setupMarketDecorations();
 updateSoundButtons();
-buildGrid();
 setupGridInput();
-newBoard();
-updateDisplay();
-updateComboDisplay();
+newBoard(1);
+renderBuilding(document.getElementById('buildingSlot'), 1);
 initializeTitleAnimations();
