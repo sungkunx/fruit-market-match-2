@@ -28,6 +28,9 @@
         maxMultiplier: 3.0,
         multiplierDecay: 0.02,
         dangerSeconds: 10,
+        // Seconds of the next stage's rent that must be left after paying for an expansion.
+        // Keep it above dangerSeconds so the siren does not start the moment the shop grows.
+        expandReserveSeconds: 15,
         clearCashMultiplier: 2,
         leaderboardMinScore: 100000
     };

@@ -29,6 +29,7 @@ const T = {
     maxMultiplier: 3,
     multiplierDecay: 0.02,
     dangerSeconds: 10,
+    expandReserveSeconds: 10,
     clearCashMultiplier: 2,
     leaderboardMinScore: 100000
 };
@@ -133,10 +134,26 @@ test('finishMove applies the new combo state and remembers the best multiplier a
     assert.equal(Economy.finishMove(after, scored, 1).maxChain, 3);
 });
 
-test('canExpand needs the full expansion cost', () => {
-    assert.equal(Economy.canExpand(runAt({ cash: 999 }), T), false);
-    assert.equal(Economy.canExpand(runAt({ cash: 1000 }), T), true);
+test('canExpand needs the expansion cost plus a reserve of the next stage\'s rent', () => {
+    // Stage 2 rent is 20/s, so the 10-second reserve is 200 on top of the 1000 cost.
+    assert.equal(Economy.expandRequirement(runAt({}), T), 1200);
+    assert.equal(Economy.canExpand(runAt({ cash: 1000 }), T), false);
+    assert.equal(Economy.canExpand(runAt({ cash: 1199 }), T), false);
+    assert.equal(Economy.canExpand(runAt({ cash: 1200 }), T), true);
     assert.equal(Economy.nextExpandCost(runAt({ stage: 3 }), T), 3000);
+});
+
+test('the reserve uses today\'s inflation and is not needed for the clear', () => {
+    assert.equal(Economy.expandRequirement(runAt({ time: 30 }), T), 1000 + 20 * 1.5 * 10);
+    assert.equal(Economy.expandRequirement(runAt({ stage: 6 }), T), 6000);
+    assert.equal(Economy.expandRequirement(runAt({ stage: 7 }), T), null);
+});
+
+test('after expanding with just the requirement the shop can pay its new rent for the reserve time', () => {
+    const run = Economy.expand(runAt({ cash: 1200 }), T);
+    assert.equal(run.stage, 2);
+    assert.equal(run.cash, 200);
+    assert.equal(run.cash / Economy.currentRent(run, T), 10);
 });
 
 test('expand pays, moves up a stage, and restarts the stage clock but not game time', () => {

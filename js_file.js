@@ -465,9 +465,12 @@ function updateExpandButton() {
         : `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
 
     const ready = gameRunning && Economy.canExpand(run, Tuning);
-    document.getElementById('expandHint').textContent = ready
-        ? (isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요')
-        : `수익 ${formatMoney(cost - Math.max(0, run.cash))} 더 필요`;
+    const shortfall = formatMoney(Economy.expandRequirement(run, Tuning) - Math.max(0, run.cash));
+    let hint = isFinal ? `수익 ${shortfall} 더 필요` : `준비금 포함 ${shortfall} 더 필요`;
+    if (ready) {
+        hint = isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요';
+    }
+    document.getElementById('expandHint').textContent = hint;
     button.disabled = !ready;
     button.classList.toggle('ready', ready);
 }
@@ -490,8 +493,7 @@ function openExpandSheet() {
     document.getElementById('sheetCost').textContent = '−' + formatMoney(cost);
     document.getElementById('sheetSummary').textContent = isFinal
         ? `영업을 마치고 정산합니다. 점수 = 매출 + 건물 가치 ${formatMoney(cost)} + 남은 수익 × ${Tuning.clearCashMultiplier}`
-        : `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)}`;
-    document.getElementById('sheetWarning').hidden = isFinal || cashAfter >= nextRent * Tuning.dangerSeconds;
+        : `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)} · 새 임대료 ${Math.floor(cashAfter / nextRent)}초분 확보`;
 
     renderBuilding(document.getElementById('sheetFrom'), run.stage);
     renderBuilding(document.getElementById('sheetTo'), nextStage);
@@ -599,8 +601,8 @@ function updateDashboard() {
     document.getElementById('revenue').textContent = formatMoney(run.revenue);
     document.getElementById('cash').textContent = formatMoney(Math.max(0, run.cash));
 
-    const cost = Economy.nextExpandCost(run, Tuning);
-    const ratio = cost ? Math.min(1, Math.max(0, run.cash) / cost) : 1;
+    const requirement = Economy.expandRequirement(run, Tuning);
+    const ratio = requirement ? Math.min(1, Math.max(0, run.cash) / requirement) : 1;
     document.getElementById('cashBar').style.width = (ratio * 100).toFixed(1) + '%';
 
     updateCostLine();

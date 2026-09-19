@@ -14,7 +14,6 @@ const PLAYERS = [
 ];
 const DT = 0.1;
 const MAX_TIME = 1200;
-const EXPAND_BUFFER_SECONDS = 8; // the bot keeps this much of the next stage's rent after paying
 const CLEAR_WAIT_SECONDS = 40; // the bot earns this long at the last stage before clearing
 
 // Deterministic pseudo-random numbers in [0, 1) (mulberry32).
@@ -84,9 +83,8 @@ function playRun(interval, seed) {
 
         const lastBeforeClear = run.stage === Tuning.stages.length - 1;
         if (!lastBeforeClear) {
-            const cost = Economy.nextExpandCost(run, Tuning);
-            const buffer = Economy.projectedRent(run, Tuning, run.stage + 1) * EXPAND_BUFFER_SECONDS;
-            if (run.cash >= cost + buffer) {
+            // Like a player pressing the button the moment it lights up.
+            if (Economy.canExpand(run, Tuning)) {
                 run = Economy.expand(run, Tuning);
                 reachedAt.push(Math.round(run.time));
                 const info = Tuning.stages[run.stage - 1];

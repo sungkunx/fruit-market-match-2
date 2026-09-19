@@ -110,9 +110,20 @@
         return state.stage < tuning.stages.length ? stageInfo(state, tuning).expandCost : null;
     }
 
-    function canExpand(state, tuning) {
+    // Cash needed before expanding: the cost plus a reserve of the next stage's rent, so the
+    // bigger shop does not go bankrupt before its first sale. The clear needs no reserve.
+    // Only the cost is paid. Null at the last stage.
+    function expandRequirement(state, tuning) {
         const cost = nextExpandCost(state, tuning);
-        return !state.ended && cost !== null && state.cash >= cost;
+        if (cost === null) return null;
+        const nextStage = state.stage + 1;
+        if (nextStage === tuning.stages.length) return cost;
+        return cost + projectedRent(state, tuning, nextStage) * tuning.expandReserveSeconds;
+    }
+
+    function canExpand(state, tuning) {
+        const requirement = expandRequirement(state, tuning);
+        return !state.ended && requirement !== null && state.cash >= requirement;
     }
 
     // Pays for the next stage. Reaching the last stage ends the run as a clear.
@@ -164,6 +175,7 @@
         addEarnings,
         finishMove,
         nextExpandCost,
+        expandRequirement,
         canExpand,
         expand,
         isBankrupt,
