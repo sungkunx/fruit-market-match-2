@@ -1,6 +1,9 @@
 const SWIPE_THRESHOLD = 0.3; // fraction of a cell the finger must travel to count as a swipe
 const TICK_MS = 100;
 const TICK_SECONDS = TICK_MS / 1000;
+// Rules for the run in progress: the real tuning, or a copy that opens in the practice shop.
+const PRACTICE_RULES = { ...Tuning, stages: [Tuning.tutorialStage, ...Tuning.stages.slice(1)] };
+let rules = Tuning;
 const FRUIT_NAMES = {
     apple: '사과',
     banana: '바나나',
@@ -30,6 +33,17 @@ let sheetOpen = false;
 let hiddenPause = false;
 let expanding = false;
 let stageCardOpen = false;
+const TUTORIAL_KEY = 'fruitMarketTutorialDone';
+const PRACTICE_LINES = {
+    1: '과일을 밀어 같은 과일 3개를 한 줄로 맞춰 보세요',
+    2: '판 돈은 매출(점수)과 수익에 함께 쌓여요',
+    3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!',
+    4: '돈이 모였어요. 가게를 키워 보세요!'
+};
+const PRACTICE_RENT_TIP_SECONDS = 4;
+let practiceStep = 0; // 0 = not a practice run
+let practiceStepAt = 0;
+let practiceDoneOpen = false;
 let loopInterval;
 let gameSession = 0;
 let pointerStart = null;
@@ -97,11 +111,11 @@ function formatMoney(value) {
 }
 
 function stageInfo(stage) {
-    return Tuning.stages[stage - 1];
+    return rules.stages[stage - 1];
 }
 
 function fruitsForStage(stage) {
-    return Tuning.fruitOrder.slice(0, stageInfo(stage).fruits);
+    return rules.fruitOrder.slice(0, stageInfo(stage).fruits);
 }
 
 function fruitSrc(fruit, frame) {
@@ -273,7 +287,7 @@ function showFailedExpression(cells) {
 }
 
 function isPaused() {
-    return sheetOpen || hiddenPause || expanding || stageCardOpen;
+    return sheetOpen || hiddenPause || expanding || stageCardOpen || practiceDoneOpen;
 }
 
 function canAcceptInput() {
@@ -343,7 +357,7 @@ async function handleSwap(a, b) {
     const session = gameSession;
     const movedFruit = board[a.row][a.col];
     const displacedFruit = board[b.row][b.col];
-    run = Economy.chargeSwap(run, Tuning);
+    run = Economy.chargeSwap(run, rules);
     updateDashboard();
     const result = Board.resolveMove(board, a, b, Math.random, activeFruits);
 
@@ -366,7 +380,7 @@ async function handleSwap(a, b) {
     clearAnimations(a);
     clearAnimations(b);
 
-    const scored = Economy.scoreMove(run, Tuning, result, movedFruit, displacedFruit);
+    const scored = Economy.scoreMove(run, rules, result, movedFruit, displacedFruit);
     const completed = await playSteps(result.steps, scored.stepScores, session);
     if (!completed) return;
 
@@ -392,8 +406,11 @@ async function playSteps(steps, stepScores, session) {
         if (session !== gameSession) return false;
 
         run = Economy.addEarnings(run, stepScores[i]);
-        crowd = Crowd.recordEarning(crowd, stepScores[i], run.time, Tuning.crowdWindowSeconds);
+        crowd = Crowd.recordEarning(crowd, stepScores[i], run.time, rules.crowdWindowSeconds);
         addCustomer();
+        if (practiceStep === 1) {
+            setPracticeStep(2);
+        }
         showEarning(stepScores[i]);
         updateDashboard();
         if (step.chain >= 2) {
@@ -478,7 +495,7 @@ function createCustomerElement() {
 
 // A customer walks in from the nearer edge and joins the queue.
 function addCustomer() {
-    if (customers.length >= Tuning.crowdMax) return;
+    if (customers.length >= rules.crowdMax) return;
     const element = createCustomerElement();
     const entryX = customerSpot(customers.length).x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
     element.style.transform = `translateX(${entryX}px)`;
@@ -524,8 +541,8 @@ function hopRandomCustomer() {
 
 // Walks customers in or out toward the size the recent earning pace calls for.
 function updateCrowd() {
-    const pace = Crowd.earningPace(crowd, run.time, Tuning.crowdWindowSeconds);
-    const target = Crowd.targetCrowdSize(pace, Economy.currentRent(run, Tuning), Tuning);
+    const pace = Crowd.earningPace(crowd, run.time, rules.crowdWindowSeconds);
+    const target = Crowd.targetCrowdSize(pace, Economy.currentRent(run, rules), rules);
     if (customers.length > target) {
         removeOldestCustomer();
     } else {
@@ -581,21 +598,21 @@ function withRo(word) {
 
 function updateExpandButton() {
     const button = document.getElementById('expandBtn');
-    const cost = Economy.nextExpandCost(run, Tuning);
+    const cost = Economy.nextExpandCost(run, rules);
     if (cost === null) {
         button.hidden = true;
         return;
     }
     button.hidden = false;
 
-    const isFinal = run.stage === Tuning.stages.length - 1;
+    const isFinal = run.stage === rules.stages.length - 1;
     const nextName = stageInfo(run.stage + 1).name;
     document.getElementById('expandTitle').textContent = isFinal
         ? `${nextName} 세우기 · ${formatMoney(cost)}`
         : `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
 
-    const ready = gameRunning && Economy.canExpand(run, Tuning);
-    const shortfall = formatMoney(Economy.expandRequirement(run, Tuning) - Math.max(0, run.cash));
+    const ready = gameRunning && Economy.canExpand(run, rules);
+    const shortfall = formatMoney(Economy.expandRequirement(run, rules) - Math.max(0, run.cash));
     let hint = isFinal ? `수익 ${shortfall} 더 필요` : `준비금 포함 ${shortfall} 더 필요`;
     if (ready) {
         hint = isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요';
@@ -606,33 +623,33 @@ function updateExpandButton() {
 }
 
 function openExpandSheet() {
-    if (!canAcceptInput() || !Economy.canExpand(run, Tuning)) return;
+    if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
     sheetOpen = true;
 
-    const cost = Economy.nextExpandCost(run, Tuning);
+    const cost = Economy.nextExpandCost(run, rules);
     const nextStage = run.stage + 1;
     const current = stageInfo(run.stage);
     const next = stageInfo(nextStage);
-    const isFinal = nextStage === Tuning.stages.length;
+    const isFinal = nextStage === rules.stages.length;
     const cashAfter = run.cash - cost;
-    const nextRent = Economy.projectedRent(run, Tuning, nextStage);
+    const nextRent = Economy.projectedRent(run, rules, nextStage);
 
     document.getElementById('sheetTitle').textContent = isFinal
         ? `${next.name}을 세울까요?`
         : `${withRo(next.name)} 확장할까요?`;
     document.getElementById('sheetCost').textContent = '−' + formatMoney(cost);
     document.getElementById('sheetSummary').textContent = isFinal
-        ? `영업을 마치고 정산합니다. 점수 = 매출 + 건물 가치 ${formatMoney(cost)} + 남은 수익 × ${Tuning.clearCashMultiplier}`
+        ? `영업을 마치고 정산합니다. 점수 = 매출 + 건물 가치 ${formatMoney(cost)} + 남은 수익 × ${rules.clearCashMultiplier}`
         : `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)} · 새 임대료 ${Math.floor(cashAfter / nextRent)}초분 확보`;
 
     renderBuilding(document.getElementById('sheetFrom'), run.stage);
     renderBuilding(document.getElementById('sheetTo'), nextStage);
 
-    const newFruit = Tuning.fruitOrder[next.fruits - 1];
+    const newFruit = rules.fruitOrder[next.fruits - 1];
     const changes = isFinal
-        ? [['예상 점수', formatMoney(run.revenue + cost + cashAfter * Tuning.clearCashMultiplier)]]
+        ? [['예상 점수', formatMoney(run.revenue + cost + cashAfter * rules.clearCashMultiplier)]]
         : [
-            ['임대료', `${formatMoney(Economy.currentRent(run, Tuning))} → ${formatMoney(nextRent)} /초`],
+            ['임대료', `${formatMoney(Economy.currentRent(run, rules))} → ${formatMoney(nextRent)} /초`],
             ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
             ['과일', next.fruits > current.fruits ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`, next.fruits > current.fruits ? fruitSrc(newFruit, '001') : null]
         ];
@@ -667,8 +684,8 @@ function openStageCard() {
     const stage = run.stage;
     const info = stageInfo(stage);
     const previous = stage > 1 ? stageInfo(stage - 1) : null;
-    const newFruit = previous && info.fruits > previous.fruits ? Tuning.fruitOrder[info.fruits - 1] : null;
-    const inflationPercent = Math.round((Economy.inflation(run, Tuning) - 1) * 100);
+    const newFruit = previous && info.fruits > previous.fruits ? rules.fruitOrder[info.fruits - 1] : null;
+    const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
 
     renderBuilding(document.getElementById('stageCardBuilding'), stage);
     document.getElementById('stageCardTitle').textContent = stage === 1 ? `${info.name} 개업!` : `${stage}단계 ${info.name} 개업!`;
@@ -681,8 +698,8 @@ function openStageCard() {
 
     const facts = [
         `진열대 ${info.cols}×${info.rows}`,
-        `과일 1개 ${formatMoney(Economy.currentPrice(run, Tuning))}원`,
-        `임대료 ${formatMoney(Economy.currentRent(run, Tuning))}/초 · 물가 +${inflationPercent}%`
+        `과일 1개 ${formatMoney(Economy.currentPrice(run, rules))}원`,
+        `임대료 ${formatMoney(Economy.currentRent(run, rules))}/초 · 물가 +${inflationPercent}%`
     ];
     if (!newFruit) {
         facts.splice(1, 0, `과일 ${info.fruits}종`);
@@ -713,13 +730,17 @@ function closeExpandSheet() {
 async function confirmExpand() {
     if (!sheetOpen) return;
     closeExpandSheet();
-    if (!canAcceptInput() || !Economy.canExpand(run, Tuning)) return;
+    if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
+    if (run.tutorial) {
+        showPracticeDone();
+        return;
+    }
 
     const session = gameSession;
     const previousFruits = activeFruits;
     isAnimating = true;
     expanding = true;
-    run = Economy.expand(run, Tuning);
+    run = Economy.expand(run, rules);
     GameAudio.playSuccess(3);
     updateDashboard();
 
@@ -784,7 +805,7 @@ function updateDashboard() {
     document.getElementById('revenue').textContent = formatMoney(run.revenue);
     document.getElementById('cash').textContent = formatMoney(Math.max(0, run.cash));
 
-    const requirement = Economy.expandRequirement(run, Tuning);
+    const requirement = Economy.expandRequirement(run, rules);
     const ratio = requirement ? Math.min(1, Math.max(0, run.cash) / requirement) : 1;
     document.getElementById('cashBar').style.width = (ratio * 100).toFixed(1) + '%';
 
@@ -793,14 +814,15 @@ function updateDashboard() {
     updateDanger();
     updateBoardInfo();
     updateExpandButton();
+    updatePractice();
 }
 
 function updateCostLine() {
-    const rent = Math.round(Economy.currentRent(run, Tuning));
-    const labor = Tuning.laborPerSwap * run.modifiers.labor;
-    const logistics = Math.round(Economy.currentLogistics(run, Tuning));
+    const rent = Math.round(Economy.currentRent(run, rules));
+    const labor = rules.laborPerSwap * run.modifiers.labor;
+    const logistics = Math.round(Economy.currentLogistics(run, rules));
     const line = document.getElementById('costLine');
-    line.textContent = `임대료 −${formatMoney(rent)}/초 · 인건비 −${formatMoney(labor)}/스왑 · 물류비 −${formatMoney(logistics)}/${Tuning.logisticsInterval}초`;
+    line.textContent = `임대료 −${formatMoney(rent)}/초 · 인건비 −${formatMoney(labor)}/스왑 · 물류비 −${formatMoney(logistics)}/${rules.logisticsInterval}초`;
 
     if (shownRent > 0 && rent > shownRent) {
         line.classList.remove('cost-bump');
@@ -839,7 +861,7 @@ function pulseMultiplier() {
 }
 
 function updateDanger() {
-    const danger = gameRunning && Economy.isInDanger(run, Tuning);
+    const danger = gameRunning && Economy.isInDanger(run, rules);
     document.getElementById('cashRow').classList.toggle('danger', danger);
     if (danger === dangerShown) return;
     dangerShown = danger;
@@ -849,9 +871,9 @@ function updateDanger() {
 
 function updateBoardInfo() {
     const info = stageInfo(run.stage);
-    const inflationPercent = Math.round((Economy.inflation(run, Tuning) - 1) * 100);
+    const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
     let text = `진열대 ${info.cols}×${info.rows} · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
-    const surchargePercent = Math.round((Economy.surcharge(run, Tuning) - 1) * 100);
+    const surchargePercent = Math.round((Economy.surcharge(run, rules) - 1) * 100);
     if (surchargePercent > 0) {
         text += ` · 백화점 할증 +${surchargePercent}%`;
     }
@@ -890,7 +912,7 @@ function showComboEffect(text) {
 // Game time only moves while nothing is paused. Bankruptcy waits for the move on screen.
 function onTick() {
     if (!gameRunning || isPaused()) return;
-    run = Economy.tick(run, Tuning, TICK_SECONDS);
+    run = Economy.tick(run, rules, TICK_SECONDS);
     updateDashboard();
     crowdClock += TICK_SECONDS;
     if (crowdClock >= CROWD_UPDATE_SECONDS - 1e-9) {
@@ -913,7 +935,7 @@ function endRun() {
     clearInterval(loopInterval);
     resumeGame();
     run = Economy.bankrupt(run); // keeps a clear as a clear
-    score = Economy.finalScore(run, Tuning);
+    score = Economy.finalScore(run, rules);
     updateDashboard();
     sendCustomersHome();
     GameAudio.stopMusic();
@@ -945,7 +967,7 @@ function showResult() {
     document.getElementById('resultMaxMultiplier').textContent = `x${run.maxMultiplier.toFixed(1)}`;
     document.getElementById('resultMaxChain').textContent = run.maxChain;
 
-    const canSubmit = isNewPersonalBest && score >= Tuning.leaderboardMinScore;
+    const canSubmit = isNewPersonalBest && score >= rules.leaderboardMinScore;
     document.getElementById('scoreSubmit').style.display = canSubmit ? 'block' : 'none';
     document.getElementById('playAgainBtn').style.display = canSubmit ? 'none' : 'block';
 
@@ -971,6 +993,85 @@ function countUp(element, target, duration) {
         if (progress < 1) requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+}
+
+function isTutorialDone() {
+    return localStorage.getItem(TUTORIAL_KEY) === 'true';
+}
+
+function showHint() {
+    const move = Board.findBestMove(board);
+    if (!move) return;
+    [move.a, move.b].forEach(cell => cellElements[cell.row][cell.col].classList.add('hint'));
+}
+
+function clearHint() {
+    document.querySelectorAll('.cell.hint').forEach(cell => cell.classList.remove('hint'));
+}
+
+function setPracticeStep(step) {
+    practiceStep = step;
+    practiceStepAt = run.time;
+    clearHint();
+    const bubble = document.getElementById('coachBubble');
+    bubble.classList.toggle('point-expand', step === 4);
+    document.getElementById('coachText').textContent = PRACTICE_LINES[step];
+    bubble.hidden = false;
+    if (step === 1) {
+        showHint();
+    }
+}
+
+// Moves the practice lesson on when its condition is met. Called whenever the dashboard updates.
+function updatePractice() {
+    if (!practiceStep || !gameRunning) return;
+    if ((practiceStep === 2 || practiceStep === 3) && Economy.canExpand(run, rules)) {
+        setPracticeStep(4);
+    } else if (practiceStep === 2 && run.time - practiceStepAt >= PRACTICE_RENT_TIP_SECONDS) {
+        setPracticeStep(3);
+    }
+}
+
+function showPracticeDone() {
+    document.getElementById('coachBubble').hidden = true;
+    practiceDoneOpen = true;
+    document.getElementById('practiceDoneCard').classList.add('show');
+    GameAudio.playSuccess(3);
+}
+
+// Stops the practice run without a result screen or a saved score.
+function leavePractice() {
+    gameRunning = false;
+    gameSession++;
+    clearInterval(loopInterval);
+    isAnimating = false;
+    expanding = false;
+    practiceDoneOpen = false;
+    closeExpandSheet();
+    practiceStep = 0;
+    clearHint();
+    document.getElementById('coachBubble').hidden = true;
+    document.getElementById('practiceSkipBtn').hidden = true;
+    document.getElementById('practiceDoneCard').classList.remove('show');
+    clearCustomers();
+    GameAudio.stopMusic();
+    GameAudio.setHurry(false);
+}
+
+// "건너뛰기" and the practice-done card both land here.
+function endPracticeAndOpenShop() {
+    localStorage.setItem(TUTORIAL_KEY, 'true');
+    leavePractice();
+    showCountdown();
+}
+
+// "튜토리얼 다시 하기" in the how-to-play popup.
+function startPracticeFromHelp() {
+    closeTutorial();
+    GameAudio.init();
+    document.getElementById('startScreen').style.display = 'none';
+    document.body.classList.remove('on-start');
+    actuallyStartGame(true);
 }
 
 function pauseForHidden() {
@@ -1039,8 +1140,12 @@ function startGame() {
     document.getElementById('startScreen').style.display = 'none';
     document.body.classList.remove('on-start');
 
-    // Show countdown
-    showCountdown();
+    // First visit: the practice shop instead of the countdown
+    if (isTutorialDone()) {
+        showCountdown();
+    } else {
+        actuallyStartGame(true);
+    }
 }
 
 function showCountdown() {
@@ -1069,14 +1174,18 @@ function showCountdown() {
     }, 1000);
 }
 
-function actuallyStartGame() {
+function actuallyStartGame(practiceMode = false) {
     gameSession++;
-    run = Economy.createRun(Tuning);
+    rules = practiceMode ? PRACTICE_RULES : Tuning;
+    run = Economy.createRun(rules, { tutorial: practiceMode });
     gameRunning = true;
     isAnimating = false;
     sheetOpen = false;
     hiddenPause = false;
     expanding = false;
+    stageCardOpen = false;
+    practiceDoneOpen = false;
+    practiceStep = 0;
     pointerStart = null;
     comboLevel = -1; // forces the first update to set the effects
     shownRent = 0;
@@ -1093,7 +1202,12 @@ function actuallyStartGame() {
 
     GameAudio.startMusic();
     startLoop();
-    openStageCard();
+    if (practiceMode) {
+        document.getElementById('practiceSkipBtn').hidden = false;
+        setPracticeStep(1);
+    } else {
+        openStageCard();
+    }
     if (document.hidden) pauseForHidden();
 }
 
@@ -1106,6 +1220,12 @@ function restartGame() {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
+    practiceDoneOpen = false;
+    practiceStep = 0;
+    clearHint();
+    document.getElementById('coachBubble').hidden = true;
+    document.getElementById('practiceSkipBtn').hidden = true;
+    document.getElementById('practiceDoneCard').classList.remove('show');
     pointerStart = null;
     clearInterval(loopInterval);
 

@@ -71,6 +71,7 @@
                 <span class="stage-name" id="stageName">천막</span>
             </div>
             <div class="shop-buttons">
+                <button class="practice-skip-btn" id="practiceSkipBtn" onclick="endPracticeAndOpenShop()" hidden>건너뛰기</button>
                 <button class="sound-btn" onclick="toggleSound()" aria-label="Toggle sound" aria-pressed="false">🔊</button>
                 <button class="restart-btn-game" onclick="restartGame()" aria-label="Home">🏠</button>
             </div>
@@ -108,6 +109,7 @@
         <div class="board-info" id="boardInfo"></div>
 
         <div class="combo-text" id="comboText"></div>
+        <div class="coach-bubble" id="coachBubble" hidden><span id="coachText"></span></div>
     </div>
 
     <div class="siren-warning" id="sirenWarning"></div>
@@ -146,6 +148,14 @@
             <ul class="stage-card-facts" id="stageCardFacts"></ul>
             <p class="stage-card-tip" id="stageCardTip"></p>
             <button class="start-btn" onclick="closeStageCard()">장사 시작</button>
+        </div>
+    </div>
+
+    <div class="stage-card-overlay" id="practiceDoneCard">
+        <div class="stage-card">
+            <h2>좋아요! 이제 진짜 개업이에요</h2>
+            <p class="stage-card-tip">진짜 가게는 과일이 더 많고 임대료도 훨씬 비싸요. 손님을 모아 보세요!</p>
+            <button class="start-btn" onclick="endPracticeAndOpenShop()">개업하기</button>
         </div>
     </div>
 
@@ -218,6 +228,8 @@
                     <div class="rule-title">🚀 우주 최강 건물</div>
                     <div class="rule-text">백화점에서 우주 최강 건물을 세우면 클리어! 건물 가치와 남은 수익 두 배가 점수에 더해져요. 하지만 백화점 임대료는 머무를수록 치솟아요.</div>
                 </div>
+
+                <button class="start-btn replay-practice-btn" onclick="startPracticeFromHelp()">🎓 튜토리얼 다시 하기</button>
             </div>
         </div>
     </div>
