@@ -1826,7 +1826,7 @@ body.combo-bg-3 {
 /* 확장 버튼 바로 아래에서 버튼을 가리킨다 */
 .coach-bubble.point-expand {
     bottom: auto;
-    top: calc(clamp(170px, 27vh, 240px) + 10px);
+    top: calc(clamp(170px, 27vh, 240px) - 14px);
 }
 
 .coach-bubble.point-expand::before {

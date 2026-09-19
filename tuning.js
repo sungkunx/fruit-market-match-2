@@ -18,6 +18,9 @@
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
         tutorialStage: { name: '연습 천막', cols: 5, rows: 5, fruits: 3, price: 2, rent: 2, logistics: 0, expandCost: 200 },
+        // Practice pacing: seconds bubble 2 shows before the rent tip, and the least time the rent tip stays up.
+        practiceRentTipSeconds: 4,
+        practiceStepMinSeconds: 3,
         inflationRate: 1.15,
         inflationInterval: 30,
         surchargeStage: 6,
@@ -38,7 +41,8 @@
         // Customers in front of the shop: earnings over the last window, compared with rent.
         crowdWindowSeconds: 8,
         crowdPerRentPace: 3,
-        crowdMax: 14
+        crowdMax: 14,
+        crowdUpdateSeconds: 0.5
     };
 
     if (typeof module !== 'undefined' && module.exports) {

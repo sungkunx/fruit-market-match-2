@@ -40,7 +40,6 @@ const PRACTICE_LINES = {
     3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!',
     4: '돈이 모였어요. 가게를 키워 보세요!'
 };
-const PRACTICE_RENT_TIP_SECONDS = 4;
 let practiceStep = 0; // 0 = not a practice run
 let practiceStepAt = 0;
 let practiceDoneOpen = false;
@@ -61,7 +60,6 @@ const CUSTOMER_SHIRTS = ['var(--awning-red)', 'var(--leaf)', 'var(--store-blue)'
 const CUSTOMER_IMAGE_COUNT = 4;
 const CUSTOMER_EDGE_X = 220; // px from the door where customers enter and leave
 const CUSTOMER_WALK_MS = 600;
-const CROWD_UPDATE_SECONDS = 0.5;
 let crowd = Crowd.createCrowd();
 let customers = []; // oldest first: { element, x }
 let crowdClock = 0;
@@ -441,7 +439,6 @@ function showEarning(amount) {
     const label = document.createElement('div');
     label.className = 'earning-float';
     label.textContent = '+' + formatMoney(amount);
-
     document.getElementById('boardFrame').appendChild(label);
     setTimeout(() => label.remove(), 900);
 }
@@ -611,7 +608,7 @@ function updateExpandButton() {
         ? `${nextName} 세우기 · ${formatMoney(cost)}`
         : `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
 
-    const ready = gameRunning && Economy.canExpand(run, rules);
+    const ready = gameRunning && Economy.canExpand(run, rules) && (!run.tutorial || practiceStep === 4);
     const shortfall = formatMoney(Economy.expandRequirement(run, rules) - Math.max(0, run.cash));
     let hint = isFinal ? `수익 ${shortfall} 더 필요` : `준비금 포함 ${shortfall} 더 필요`;
     if (ready) {
@@ -623,7 +620,7 @@ function updateExpandButton() {
 }
 
 function openExpandSheet() {
-    if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
+    if (!canAcceptInput() || !Economy.canExpand(run, rules) || (run.tutorial && practiceStep !== 4)) return;
     sheetOpen = true;
 
     const cost = Economy.nextExpandCost(run, rules);
@@ -915,7 +912,7 @@ function onTick() {
     run = Economy.tick(run, rules, TICK_SECONDS);
     updateDashboard();
     crowdClock += TICK_SECONDS;
-    if (crowdClock >= CROWD_UPDATE_SECONDS - 1e-9) {
+    if (crowdClock >= rules.crowdUpdateSeconds - 1e-9) {
         crowdClock = 0;
         updateCrowd();
     }
@@ -934,6 +931,7 @@ function endRun() {
     gameRunning = false;
     clearInterval(loopInterval);
     resumeGame();
+    closeStageCard();
     run = Economy.bankrupt(run); // keeps a clear as a clear
     score = Economy.finalScore(run, rules);
     updateDashboard();
@@ -1025,10 +1023,11 @@ function setPracticeStep(step) {
 // Moves the practice lesson on when its condition is met. Called whenever the dashboard updates.
 function updatePractice() {
     if (!practiceStep || !gameRunning) return;
-    if ((practiceStep === 2 || practiceStep === 3) && Economy.canExpand(run, rules)) {
-        setPracticeStep(4);
-    } else if (practiceStep === 2 && run.time - practiceStepAt >= PRACTICE_RENT_TIP_SECONDS) {
+    const shownFor = run.time - practiceStepAt;
+    if (practiceStep === 2 && shownFor >= rules.practiceRentTipSeconds) {
         setPracticeStep(3);
+    } else if (practiceStep === 3 && shownFor >= rules.practiceStepMinSeconds && Economy.canExpand(run, rules)) {
+        setPracticeStep(4);
     }
 }
 
@@ -1047,6 +1046,8 @@ function leavePractice() {
     isAnimating = false;
     expanding = false;
     practiceDoneOpen = false;
+    comboLevel = 0;
+    setComboEffects(0);
     closeExpandSheet();
     practiceStep = 0;
     clearHint();
