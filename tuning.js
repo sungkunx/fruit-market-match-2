@@ -8,12 +8,12 @@
         frameSize: 7,
         // expandCost is what it takes to leave this stage. The last stage is the clear ending.
         stages: [
-            { name: '천막', cols: 5, rows: 5, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 1400 },
-            { name: '좌판', cols: 6, rows: 5, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 7900 },
-            { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 29000 },
-            { name: '편의점', cols: 6, rows: 6, fruits: 6, price: 248, rent: 450, logistics: 21, expandCost: 42000 },
-            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 84000 },
-            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 5500000 },
+            { name: '천막', cols: 5, rows: 5, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 1680 },
+            { name: '좌판', cols: 6, rows: 5, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 9480 },
+            { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 34800 },
+            { name: '편의점', cols: 6, rows: 6, fruits: 6, price: 248, rent: 450, logistics: 21, expandCost: 50400 },
+            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 100800 },
+            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 6600000 },
             { name: '우주 최강 건물', cols: 7, rows: 7, fruits: 7, price: 0, rent: 0, logistics: 0, expandCost: null }
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
