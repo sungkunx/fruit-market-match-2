@@ -103,7 +103,7 @@ function toggleSound() {
 }
 
 function formatMoney(value) {
-    return Math.floor(value).toLocaleString('ko-KR');
+    return '$' + Math.floor(value).toLocaleString('ko-KR');
 }
 
 function stageInfo(stage) {
@@ -696,7 +696,7 @@ function openStageCard() {
 
     const facts = [
         `진열대 ${info.cols}×${info.rows}`,
-        `과일 1개 ${formatMoney(Economy.currentPrice(run, rules))}원`,
+        `과일 1개 ${formatMoney(Economy.currentPrice(run, rules))}`,
         `임대료 ${formatMoney(Economy.currentRent(run, rules))}/초 · 물가 +${inflationPercent}%`
     ];
     if (!newFruit) {
@@ -1504,7 +1504,7 @@ function displayRankings(rankings) {
         rankItem.innerHTML = `
             <span class="rank-number">${index + 1}</span>
             <span class="rank-name">${player.name}</span>
-            <span class="rank-score">${player.score.toLocaleString()}</span>
+            <span class="rank-score">${formatMoney(player.score)}</span>
         `;
         rankingList.appendChild(rankItem);
     });
@@ -1513,7 +1513,7 @@ function displayRankings(rankings) {
 function updateUserRank(rankings) {
     const userScore = highestScore;
     const userRankElement = document.getElementById('yourRankScore');
-    userRankElement.textContent = userScore.toLocaleString();
+    userRankElement.textContent = formatMoney(userScore);
     
     // Calculate user position
     const userPosition = rankings.filter(player => player.score > userScore).length + 1;
