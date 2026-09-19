@@ -11,6 +11,15 @@ const FRUIT_NAMES = {
     cherry: '체리'
 };
 
+const STAGE_TIPS = [
+    '과일 4종 — 연쇄를 노려 보세요',
+    '과일이 5종이라 연쇄가 줄어요. 한 수 한 수 신중하게',
+    '진열대가 넓어졌어요. 숨 돌릴 틈이에요',
+    '과일 6종 — 같은 과일 연속 매치로 배율을 지키세요',
+    '넓어진 진열대로 크게 벌 때예요',
+    '마지막 과일까지 입고! 백화점 임대료는 머무를수록 치솟아요'
+];
+
 let run = null;
 let board = [];
 let activeFruits = [];
@@ -20,6 +29,7 @@ let isAnimating = false;
 let sheetOpen = false;
 let hiddenPause = false;
 let expanding = false;
+let stageCardOpen = false;
 let loopInterval;
 let gameSession = 0;
 let pointerStart = null;
@@ -263,7 +273,7 @@ function showFailedExpression(cells) {
 }
 
 function isPaused() {
-    return sheetOpen || hiddenPause || expanding;
+    return sheetOpen || hiddenPause || expanding || stageCardOpen;
 }
 
 function canAcceptInput() {
@@ -624,11 +634,11 @@ function openExpandSheet() {
         : [
             ['임대료', `${formatMoney(Economy.currentRent(run, Tuning))} → ${formatMoney(nextRent)} /초`],
             ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
-            ['과일', next.fruits > current.fruits ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`]
+            ['과일', next.fruits > current.fruits ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`, next.fruits > current.fruits ? fruitSrc(newFruit, '001') : null]
         ];
     const list = document.getElementById('sheetChanges');
     list.innerHTML = '';
-    changes.forEach(([label, value]) => {
+    changes.forEach(([label, value, image]) => {
         const item = document.createElement('div');
         item.className = 'sheet-change';
         const labelElement = document.createElement('div');
@@ -637,12 +647,62 @@ function openExpandSheet() {
         const valueElement = document.createElement('div');
         valueElement.className = 'sheet-change-value';
         valueElement.textContent = value;
+        if (image) {
+            const fruitImage = document.createElement('img');
+            fruitImage.className = 'sheet-change-fruit';
+            fruitImage.src = image;
+            fruitImage.alt = '';
+            valueElement.prepend(fruitImage);
+        }
         item.append(labelElement, valueElement);
         list.appendChild(item);
     });
 
     document.getElementById('sheetConfirm').textContent = isFinal ? '세우고 영업 마치기' : '확장한다';
     document.getElementById('expandSheet').classList.add('show');
+}
+
+// Tells the player what the stage that just opened changes. Game time waits while it shows.
+function openStageCard() {
+    const stage = run.stage;
+    const info = stageInfo(stage);
+    const previous = stage > 1 ? stageInfo(stage - 1) : null;
+    const newFruit = previous && info.fruits > previous.fruits ? Tuning.fruitOrder[info.fruits - 1] : null;
+    const inflationPercent = Math.round((Economy.inflation(run, Tuning) - 1) * 100);
+
+    renderBuilding(document.getElementById('stageCardBuilding'), stage);
+    document.getElementById('stageCardTitle').textContent = stage === 1 ? `${info.name} 개업!` : `${stage}단계 ${info.name} 개업!`;
+
+    document.getElementById('stageCardFruit').hidden = !newFruit;
+    if (newFruit) {
+        document.getElementById('stageCardFruitImage').src = fruitSrc(newFruit, '002');
+        document.getElementById('stageCardFruitText').textContent = `${FRUIT_NAMES[newFruit]} 입고! 이제 과일 ${info.fruits}종`;
+    }
+
+    const facts = [
+        `진열대 ${info.cols}×${info.rows}`,
+        `과일 1개 ${formatMoney(Economy.currentPrice(run, Tuning))}원`,
+        `임대료 ${formatMoney(Economy.currentRent(run, Tuning))}/초 · 물가 +${inflationPercent}%`
+    ];
+    if (!newFruit) {
+        facts.splice(1, 0, `과일 ${info.fruits}종`);
+    }
+    const list = document.getElementById('stageCardFacts');
+    list.innerHTML = '';
+    facts.forEach(text => {
+        const item = document.createElement('li');
+        item.textContent = text;
+        list.appendChild(item);
+    });
+
+    document.getElementById('stageCardTip').textContent = STAGE_TIPS[stage - 1];
+    stageCardOpen = true;
+    document.getElementById('stageCard').classList.add('show');
+}
+
+function closeStageCard() {
+    stageCardOpen = false;
+    document.getElementById('stageCard').classList.remove('show');
 }
 
 function closeExpandSheet() {
@@ -684,6 +744,9 @@ async function confirmExpand() {
     }
     isAnimating = false;
     expanding = false;
+    if (gameRunning) {
+        openStageCard();
+    }
     if (gameRunning && Economy.isBankrupt(run)) {
         endRun();
     }
@@ -1030,6 +1093,7 @@ function actuallyStartGame() {
 
     GameAudio.startMusic();
     startLoop();
+    openStageCard();
     if (document.hidden) pauseForHidden();
 }
 
@@ -1041,6 +1105,7 @@ function restartGame() {
     sheetOpen = false;
     hiddenPause = false;
     expanding = false;
+    stageCardOpen = false;
     pointerStart = null;
     clearInterval(loopInterval);
 
@@ -1056,6 +1121,7 @@ function restartGame() {
     document.getElementById('gameOver').style.display = 'none';
     document.getElementById('pauseOverlay').classList.remove('show');
     document.getElementById('expandSheet').classList.remove('show');
+    document.getElementById('stageCard').classList.remove('show');
     document.getElementById('startScreen').style.display = 'flex';
     document.body.classList.add('on-start');
 
@@ -1464,6 +1530,9 @@ document.addEventListener('click', function(e) {
     if (e.target === expandSheet) {
         closeExpandSheet();
     }
+    if (e.target === document.getElementById('stageCard')) {
+        closeStageCard();
+    }
 });
 
 // Close popup with Escape key
@@ -1473,6 +1542,9 @@ document.addEventListener('keydown', function(e) {
         closeRanking();
         if (sheetOpen) {
             closeExpandSheet();
+        }
+        if (stageCardOpen) {
+            closeStageCard();
         }
     }
 });

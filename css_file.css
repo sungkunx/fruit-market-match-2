@@ -1690,6 +1690,103 @@ body.combo-bg-3 {
     40% { transform: translateY(-8px); }
 }
 
+/* ---------- 단계 안내 카드 ---------- */
+
+.stage-card-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(90, 51, 16, 0.6);
+}
+
+.stage-card-overlay.show {
+    display: flex;
+}
+
+.stage-card {
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 18px 22px;
+    text-align: center;
+    background: var(--cream);
+    border: 5px solid var(--wood-dark);
+    border-radius: 22px;
+    box-shadow: 0 8px 0 var(--wood-dark);
+    animation: stageCardIn 0.35s ease-out;
+}
+
+@keyframes stageCardIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.stage-card h2 {
+    font-size: 24px;
+    color: var(--awning-red);
+}
+
+.stage-card-fruit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    font-size: 17px;
+    font-weight: 700;
+    background: var(--gold);
+    border: 3px solid var(--wood-dark);
+    border-radius: 14px;
+}
+
+.stage-card-fruit img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.stage-card-facts {
+    width: 100%;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.stage-card-facts li {
+    padding: 6px 10px;
+    background: var(--awning-cream);
+    border: 2px solid var(--wood-light);
+    border-radius: 10px;
+}
+
+.stage-card-tip {
+    font-size: 13px;
+    color: var(--wood);
+}
+
+.stage-card .start-btn {
+    width: 100%;
+    min-width: 0;
+}
+
+.sheet-change-fruit {
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .sunburst,
     .bulb,
@@ -1697,6 +1794,7 @@ body.combo-bg-3 {
     .grid.combo-glow-2::after,
     .grid.combo-glow-3::after,
     .siren-active,
+    .stage-card,
     .expand-btn.ready,
     .cash-row.danger,
     .cost-line.cost-bump,
