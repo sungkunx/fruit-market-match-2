@@ -2,9 +2,6 @@
 (function (root) {
     'use strict';
 
-    const ROWS = 8;
-    const COLS = 7;
-
     function cloneBoard(board) {
         return board.map(row => row.slice());
     }
@@ -215,13 +212,13 @@
     }
 
     // Requires at least 3 fruits so every cell has a fruit that does not complete a line.
-    function createBoard(rng, fruits) {
+    function createBoard(rng, fruits, cols, rows) {
         for (;;) {
             const board = [];
-            for (let row = 0; row < ROWS; row++) {
+            for (let row = 0; row < rows; row++) {
                 const line = [];
                 board.push(line);
-                for (let col = 0; col < COLS; col++) {
+                for (let col = 0; col < cols; col++) {
                     const options = fruits.filter(fruit => {
                         const makesRow = col >= 2 && line[col - 1] === fruit && line[col - 2] === fruit;
                         const makesColumn = row >= 2 && board[row - 1][col] === fruit && board[row - 2][col] === fruit;
@@ -252,12 +249,58 @@
             if (findMatches(next).length === 0 && hasPossibleMove(next)) return next;
         }
 
-        return createBoard(rng, Array.from(new Set(flat)));
+        return createBoard(rng, Array.from(new Set(flat)), cols, rows);
+    }
+
+    // True if putting `fruit` at `cell` would complete a line of 3 with the fruits already there.
+    function makesLine(board, cell, fruit) {
+        const same = (row, col) => row >= 0 && row < board.length && col >= 0 && col < board[0].length && board[row][col] === fruit;
+        const count = (dRow, dCol) => {
+            let length = 0;
+            while (same(cell.row + dRow * (length + 1), cell.col + dCol * (length + 1))) length++;
+            return length;
+        };
+        return count(0, -1) + count(0, 1) >= 2 || count(-1, 0) + count(1, 0) >= 2;
+    }
+
+    // Grows the board for the next shop stage. Old fruits keep their places relative to each
+    // other; new columns go to the right (and left, if two are added), new rows go on top.
+    // Returns the new board and the cells that were added.
+    function expandBoard(board, fruits, cols, rows, rng) {
+        const oldRows = board.length;
+        const oldCols = board[0].length;
+        const addLeft = Math.floor((cols - oldCols) / 2);
+        const addTop = rows - oldRows;
+        const next = [];
+        const added = [];
+
+        for (let row = 0; row < rows; row++) {
+            const line = [];
+            for (let col = 0; col < cols; col++) {
+                const oldRow = row - addTop;
+                const oldCol = col - addLeft;
+                if (oldRow >= 0 && oldRow < oldRows && oldCol >= 0 && oldCol < oldCols) {
+                    line.push(board[oldRow][oldCol]);
+                } else {
+                    line.push(null);
+                    added.push({ row, col });
+                }
+            }
+            next.push(line);
+        }
+
+        added.forEach(cell => {
+            const options = fruits.filter(fruit => !makesLine(next, cell, fruit));
+            next[cell.row][cell.col] = randomFruit(rng, options.length > 0 ? options : fruits);
+        });
+
+        if (findMatches(next).length > 0 || !hasPossibleMove(next)) {
+            return { board: shuffle(next, rng), added };
+        }
+        return { board: next, added };
     }
 
     const Board = {
-        ROWS,
-        COLS,
         isAdjacent,
         findMatches,
         clearAndCollapse,
@@ -267,7 +310,8 @@
         hasPossibleMove,
         pickFruits,
         createBoard,
-        shuffle
+        shuffle,
+        expandBoard
     };
 
     if (typeof module !== 'undefined' && module.exports) {

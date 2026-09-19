@@ -155,27 +155,69 @@ test('pickFruits returns the requested number of distinct fruits', () => {
     picked.forEach(fruit => assert.ok(all.includes(fruit)));
 });
 
-test('createBoard makes an 8x7 board with no matches and at least one move', () => {
-    const fruits = ['a', 'b', 'c', 'd', 'e', 'f'];
-    for (let seed = 1; seed <= 20; seed++) {
-        const board = Board.createBoard(seededRng(seed), fruits);
-        assert.equal(board.length, Board.ROWS);
-        board.forEach(row => assert.equal(row.length, Board.COLS));
-        board.flat().forEach(fruit => assert.ok(fruits.includes(fruit)));
-        assert.deepEqual(Board.findMatches(board), []);
-        assert.equal(Board.hasPossibleMove(board), true);
-    }
+test('createBoard makes a board of the given size with no matches and at least one move', () => {
+    const sizes = [[5, 5, 3], [6, 5, 4], [6, 6, 5], [6, 7, 6], [7, 7, 7]];
+    sizes.forEach(([cols, rows, fruitCount]) => {
+        const fruits = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].slice(0, fruitCount);
+        for (let seed = 1; seed <= 10; seed++) {
+            const board = Board.createBoard(seededRng(seed), fruits, cols, rows);
+            assert.equal(board.length, rows);
+            board.forEach(row => assert.equal(row.length, cols));
+            board.flat().forEach(fruit => assert.ok(fruits.includes(fruit)));
+            assert.deepEqual(Board.findMatches(board), []);
+            assert.equal(Board.hasPossibleMove(board), true);
+        }
+    });
 });
 
 test('shuffle keeps the same fruits, leaves no matches, and has a move', () => {
     const fruits = ['a', 'b', 'c', 'd', 'e', 'f'];
     const countFruits = board => board.flat().sort().join('');
     for (let seed = 1; seed <= 10; seed++) {
-        const board = Board.createBoard(seededRng(seed), fruits);
+        const board = Board.createBoard(seededRng(seed), fruits, 7, 8);
         const shuffled = Board.shuffle(board, seededRng(seed + 100));
         assert.equal(countFruits(shuffled), countFruits(board));
         assert.deepEqual(Board.findMatches(shuffled), []);
         assert.equal(Board.hasPossibleMove(shuffled), true);
+    }
+});
+
+test('expandBoard adds a column on the right and keeps every old fruit in place', () => {
+    const board = parseBoard(['ccaba', 'bcbca', 'cbbab', 'acacc', 'aacaa']);
+    const { board: grown, added } = Board.expandBoard(board, ['a', 'b', 'c', 'd'], 6, 5, seededRng(9));
+    assert.equal(grown.length, 5);
+    grown.forEach(row => assert.equal(row.length, 6));
+    assert.deepEqual(grown.map(row => row.slice(0, 5).join('')), boardToLines(board));
+    assert.deepEqual(cellKeys(added), cellKeys([0, 1, 2, 3, 4].map(row => ({ row, col: 5 }))));
+});
+
+test('expandBoard adds new rows on top and splits two new columns left and right', () => {
+    const board = parseBoard(['ccaba', 'bcbca', 'cbbab', 'acacc', 'aacaa']);
+    const { board: grown, added } = Board.expandBoard(board, ['a', 'b', 'c', 'd'], 7, 7, seededRng(9));
+    assert.equal(grown.length, 7);
+    grown.forEach(row => assert.equal(row.length, 7));
+    assert.deepEqual(grown.slice(2).map(row => row.slice(1, 6).join('')), boardToLines(board));
+    assert.equal(added.length, 49 - 25);
+    added.forEach(cell => assert.ok(cell.row < 2 || cell.col === 0 || cell.col === 6));
+});
+
+test('expandBoard never leaves a line and always leaves a move (property test)', () => {
+    const all = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const steps = [[5, 5, 3], [6, 5, 4], [6, 6, 4], [6, 6, 5], [6, 7, 6], [7, 7, 7]];
+    for (let seed = 1; seed <= 30; seed++) {
+        const rng = seededRng(seed);
+        let board = Board.createBoard(rng, all.slice(0, 3), 5, 5);
+        steps.slice(1).forEach(([cols, rows, fruitCount]) => {
+            const fruits = all.slice(0, fruitCount);
+            const { board: grown, added } = Board.expandBoard(board, fruits, cols, rows, rng);
+            assert.equal(grown.length, rows);
+            grown.forEach(row => assert.equal(row.length, cols));
+            assert.equal(added.length, cols * rows - board.length * board[0].length);
+            grown.flat().forEach(fruit => assert.ok(fruits.includes(fruit)));
+            assert.deepEqual(Board.findMatches(grown), []);
+            assert.equal(Board.hasPossibleMove(grown), true);
+            board = grown;
+        });
     }
 });
 
@@ -220,7 +262,7 @@ test('resolveMove steps replay correctly for many random games (property test)',
 
     for (let seed = 1; seed <= seedCount; seed++) {
         const rng = seededRng(seed);
-        let board = Board.createBoard(rng, fruits);
+        let board = Board.createBoard(rng, fruits, 7, 8);
 
         for (let moveIndex = 0; moveIndex < maxMoves; moveIndex++) {
             const move = Board.findBestMove(board);
