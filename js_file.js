@@ -732,19 +732,49 @@ function endRun() {
     updateStartScreenStats();
 }
 
-// Basic result popup. Task 7 replaces this with the full result screen.
 function showResult() {
-    document.getElementById('finalScore').textContent = formatMoney(score);
+    const cleared = run.ended === 'clear';
+    const minutes = Math.floor(run.time / 60);
+    const seconds = Math.floor(run.time % 60);
+    const played = `${minutes}분 ${seconds}초`;
+
+    document.getElementById('resultTitle').textContent = cleared ? '클리어 — 우주 최강 건물 개업' : '파산 — 영업 종료';
+    document.getElementById('resultSubtitle').textContent = cleared ? `${played} 만에 개업` : `${played} 버팀 · 임대료에 무릎`;
+
     const isNewPersonalBest = score > highestScore;
-    const meetsMinimumThreshold = score >= Tuning.leaderboardMinScore;
-    if (isNewPersonalBest && meetsMinimumThreshold) {
-        document.getElementById('scoreSubmit').style.display = 'block';
-        document.getElementById('playAgainBtn').style.display = 'none';
-    } else {
-        document.getElementById('scoreSubmit').style.display = 'none';
-        document.getElementById('playAgainBtn').style.display = 'block';
-    }
+    document.getElementById('newRecordBadge').hidden = !isNewPersonalBest;
+
+    renderBuilding(document.getElementById('resultBuilding'), run.stage);
+    document.getElementById('resultGrade').textContent = `${run.stage}단계 ${stageInfo(run.stage).name}`;
+    document.getElementById('resultMaxMultiplier').textContent = `x${run.maxMultiplier.toFixed(1)}`;
+    document.getElementById('resultMaxChain').textContent = run.maxChain;
+
+    const canSubmit = isNewPersonalBest && score >= Tuning.leaderboardMinScore;
+    document.getElementById('scoreSubmit').style.display = canSubmit ? 'block' : 'none';
+    document.getElementById('playAgainBtn').style.display = canSubmit ? 'none' : 'block';
+
     document.getElementById('gameOver').style.display = 'flex';
+    countUp(document.getElementById('finalScore'), score, 1200);
+}
+
+// Rolls a number up to `target` like a jackpot counter.
+function countUp(element, target, duration) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        element.textContent = formatMoney(target);
+        return;
+    }
+    const session = gameSession;
+    const start = performance.now();
+    element.textContent = '0';
+
+    function frame(now) {
+        if (session !== gameSession) return;
+        const progress = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        element.textContent = formatMoney(target * eased);
+        if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
 }
 
 function pauseForHidden() {
@@ -763,26 +793,26 @@ async function submitScore() {
     const playerName = document.getElementById('playerNameInput').value.trim();
 
     if (!playerName) {
-        alert('Please enter your name!');
+        alert('이름을 입력해 주세요!');
         return;
     }
 
     // Show loading state
     const submitBtn = document.querySelector('.submit-score-btn');
     const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<span class="btn-icon">⏳</span>Submitting...';
+    submitBtn.innerHTML = '<span class="btn-icon">⏳</span>등록 중...';
     submitBtn.disabled = true;
 
     try {
         const success = await submitScoreToFirebase(playerName, score);
 
         if (success) {
-            alert('Successfully added to leaderboard! 🎉');
+            alert('랭킹에 등록했어요! 🎉');
         } else {
-            alert('Failed to submit score. Please try again.');
+            alert('등록에 실패했어요. 다시 시도해 주세요.');
         }
     } catch (error) {
-        alert('An error occurred while submitting your score.');
+        alert('등록 중 오류가 났어요.');
         console.error('Submit score error:', error);
     }
 
@@ -912,11 +942,11 @@ function saveGameData() {
         lastScore: lastScore,
         highestScore: highestScore
     };
-    localStorage.setItem('fruitMarketData', JSON.stringify(gameData));
+    localStorage.setItem('fruitMarketGrowthData', JSON.stringify(gameData));
 }
 
 function loadGameData() {
-    const savedData = localStorage.getItem('fruitMarketData');
+    const savedData = localStorage.getItem('fruitMarketGrowthData');
     if (savedData) {
         const gameData = JSON.parse(savedData);
         lastScore = gameData.lastScore || 0;
@@ -1023,14 +1053,9 @@ function showRanking() {
     
     // Update header with current month
     const now = new Date();
-    const monthNames = ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"];
-    const currentMonth = monthNames[now.getMonth()];
-    const currentYear = now.getFullYear();
-    
     const header = popup.querySelector('.popup-header h2');
-    header.textContent = `🏆 Global Ranking - ${currentMonth} ${currentYear}`;
-    
+    header.textContent = `🏆 이번 달 랭킹 - ${now.getFullYear()}년 ${now.getMonth() + 1}월`;
+
     // Generate and display ranking
     generateRanking();
 }
@@ -1046,7 +1071,7 @@ function getCurrentMonthCollection() {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
-    return `rankings_${year}_${month}`; // e.g., "rankings_2024_01"
+    return `growth_rankings_${year}_${month}`; // e.g., "growth_rankings_2026_09"
 }
 
 // Firebase ranking functions
@@ -1163,10 +1188,10 @@ function generateFakeRanking() {
         'MatchGod', 'FruitExpert', 'SwipeMaster', 'PuzzleKing', 'TouchPro'
     ];
     
-    // Generate 10 random scores between 15000-20000
+    // Generate 10 random scores between 1,000,000 and 5,000,000
     const rankings = [];
     for (let i = 0; i < 10; i++) {
-        const score = Math.floor(Math.random() * 5000) + 15000; // 15000-20000
+        const score = Math.floor(Math.random() * 4000000) + 1000000;
         const name = names[Math.floor(Math.random() * names.length)];
         rankings.push({ name, score });
     }
@@ -1191,16 +1216,16 @@ async function initializeMonthlyRankings() {
         
         // Dummy ranking data with funny names
         const dummyData = [
-            { name: "God", score: 20000 },           // 신
-            { name: "Deity", score: 15000 },         // 신들중에 가장 아래
-            { name: "Demigod", score: 12000 },       // 신의 바로 밑 인간
-            { name: "Bookworm", score: 9000 },       // 책을 읽을 줄 아는 인간
-            { name: "Awakened", score: 7000 },       // 정신차린 인간
-            { name: "Noob", score: 5000 },           // 폐급 인간
-            { name: "Human", score: 3500 },          // 드디어 인간
-            { name: "Fruitarian", score: 2000 },     // 과일을 좋아하는 유인원
-            { name: "Thinker", score: 1000 },        // 생각을 하는 유인원
-            { name: "Ape", score: 500 }              // 유인원
+            { name: "God", score: 20000000 },        // 신
+            { name: "Deity", score: 9000000 },       // 신들중에 가장 아래
+            { name: "Demigod", score: 5000000 },     // 신의 바로 밑 인간
+            { name: "Bookworm", score: 2500000 },    // 책을 읽을 줄 아는 인간
+            { name: "Awakened", score: 1200000 },    // 정신차린 인간
+            { name: "Noob", score: 600000 },         // 폐급 인간
+            { name: "Human", score: 300000 },        // 드디어 인간
+            { name: "Fruitarian", score: 150000 },   // 과일을 좋아하는 유인원
+            { name: "Thinker", score: 80000 },       // 생각을 하는 유인원
+            { name: "Ape", score: 30000 }            // 유인원
         ];
         
         console.log(`Initializing rankings for ${monthlyCollection}...`);

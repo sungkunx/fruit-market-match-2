@@ -43,19 +43,19 @@
         
         <div class="score-stats">
             <div class="score-item">
-                <div class="score-title">📊 Last Score</div>
+                <div class="score-title">📊 최근 점수</div>
                 <div class="score-value" id="lastScore">0</div>
             </div>
             <div class="score-item">
-                <div class="score-title">🏆 Best Score</div>
+                <div class="score-title">🏆 최고 점수</div>
                 <div class="score-value" id="highestScore">0</div>
             </div>
         </div>
-        
+
         <div class="button-container">
-            <button class="tutorial-btn" onclick="showTutorial()">📖 How to Play</button>
-            <button class="ranking-btn" onclick="showRanking()">🏆 Global Ranking</button>
-            <button class="start-btn" onclick="startGame()">🎮 Start Game</button>
+            <button class="tutorial-btn" onclick="showTutorial()">📖 게임 방법</button>
+            <button class="ranking-btn" onclick="showRanking()">🏆 이번 달 랭킹</button>
+            <button class="start-btn" onclick="startGame()">🏪 개업하기</button>
         </div>
     </div>
 
@@ -137,26 +137,43 @@
 
     <div class="game-over" id="gameOver">
         <div class="game-over-content">
-            <h2>Game Over!</h2>
+            <h2 id="resultTitle">파산 — 영업 종료</h2>
+            <p class="result-subtitle" id="resultSubtitle"></p>
+
+            <div class="result-label">총 매출 (점수)</div>
             <div class="final-score" id="finalScore">0</div>
-            
+            <div class="new-record-badge" id="newRecordBadge" hidden>★ 신기록</div>
+
+            <div class="result-grade">
+                <div class="mini-building" id="resultBuilding"></div>
+                <div>
+                    <div class="result-label">도달 등급</div>
+                    <div class="result-grade-name" id="resultGrade"></div>
+                </div>
+            </div>
+
+            <div class="result-stats">
+                <div><b id="resultMaxMultiplier">x1.0</b><span>최고 배율</span></div>
+                <div><b id="resultMaxChain">0</b><span>최장 체인</span></div>
+            </div>
+
             <!-- Score submission form -->
             <div class="score-submit" id="scoreSubmit" style="display: none;">
-                <p class="new-record-text">🎉 New High Score! Join the leaderboard:</p>
-                <input type="text" id="playerNameInput" placeholder="Enter your name" maxlength="15" class="name-input">
+                <p class="new-record-text">🎉 신기록! 랭킹에 이름을 올려 보세요</p>
+                <input type="text" id="playerNameInput" placeholder="이름" maxlength="15" class="name-input">
                 <div class="submit-buttons">
                     <button class="submit-score-btn" onclick="submitScore()">
                         <span class="btn-icon">🏆</span>
-                        Submit Score
+                        랭킹에 등록
                     </button>
                     <button class="skip-submit-btn" onclick="skipSubmit()">
                         <span class="btn-icon">⏭️</span>
-                        Skip
+                        건너뛰기
                     </button>
                 </div>
             </div>
-            
-            <button class="restart-btn" id="playAgainBtn" onclick="restartGame()">Play Again</button>
+
+            <button class="restart-btn" id="playAgainBtn" onclick="restartGame()">다시 개업</button>
         </div>
     </div>
 
@@ -164,27 +181,28 @@
     <div class="popup-overlay" id="tutorialPopup">
         <div class="popup-content">
             <div class="popup-header">
-                <h2>📖 How to Play</h2>
+                <h2>📖 게임 방법</h2>
                 <button class="close-btn" onclick="closeTutorial()">✕</button>
             </div>
             <div class="popup-body">
                 <div class="rule-section">
-                    <div class="rule-title">🎯 How to Play</div>
-                    <div class="rule-text">Swipe a fruit up, down, left, or right to swap it with its neighbor. Line up 3 or more of the same fruit to pop them!</div>
-                </div>
-                
-                <div class="rule-section">
-                    <div class="rule-title">⚡ Score Tips</div>
-                    <div class="rule-text">
-                        Bigger matches score more, and falling fruits can set off chain reactions for bonus points. Match the same fruit back-to-back to boost your multiplier faster!
-                    </div>
+                    <div class="rule-title">🍎 과일 팔기</div>
+                    <div class="rule-text">과일을 위아래 양옆으로 밀어 같은 과일 3개 이상을 한 줄로 맞추면 팔려요. 연쇄로 터지면 훨씬 많이 팔리고, 같은 과일을 연달아 팔면 배율이 빨리 올라요.</div>
                 </div>
 
                 <div class="rule-section">
-                    <div class="rule-title">⏱️ Time Bonus</div>
-                    <div class="rule-text">
-                        Popping fruit adds time to the clock, and bigger groups and chain reactions add even more. The clock is capped at 30 seconds, so it never overflows.
-                    </div>
+                    <div class="rule-title">💰 매출과 수익</div>
+                    <div class="rule-text">판 돈은 매출(점수)과 수익(잔고)에 함께 쌓여요. 매출은 줄지 않지만, 수익은 임대료·인건비·물류비로 계속 빠져나가요. 수익이 0이 되면 파산!</div>
+                </div>
+
+                <div class="rule-section">
+                    <div class="rule-title">🏪 가게 키우기</div>
+                    <div class="rule-text">수익이 모이면 가게를 확장하세요. 진열대가 넓어지고 과일이 비싸게 팔리지만 임대료도 크게 올라요. 물가는 시간이 갈수록 오르니 너무 오래 망설이면 안 돼요.</div>
+                </div>
+
+                <div class="rule-section">
+                    <div class="rule-title">🚀 우주 최강 건물</div>
+                    <div class="rule-text">백화점에서 우주 최강 건물을 세우면 클리어! 건물 가치와 남은 수익 두 배가 점수에 더해져요. 하지만 백화점 임대료는 머무를수록 치솟아요.</div>
                 </div>
             </div>
         </div>
@@ -204,7 +222,7 @@
                 <div class="user-rank" id="userRank">
                     <div class="rank-item your-rank">
                         <span class="rank-number">-</span>
-                        <span class="rank-name">You</span>
+                        <span class="rank-name">나</span>
                         <span class="rank-score" id="yourRankScore">0</span>
                     </div>
                 </div>
