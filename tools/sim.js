@@ -14,7 +14,6 @@ const PLAYERS = [
 ];
 const DT = 0.1;
 const MAX_TIME = 1200;
-const CLEAR_WAIT_SECONDS = 40; // the bot earns this long at the last stage before clearing
 
 // Deterministic pseudo-random numbers in [0, 1) (mulberry32).
 function seededRng(seed) {
@@ -55,7 +54,6 @@ function playRun(interval, seed) {
     let run = Economy.createRun(Tuning);
     let board = Board.createBoard(rng, fruitsFor(1), first.cols, first.rows);
     let nextSwapAt = interval;
-    let clearReadyAt = null;
     const reachedAt = [];
 
     while (run.time < MAX_TIME && !run.ended) {
@@ -81,22 +79,16 @@ function playRun(interval, seed) {
             break;
         }
 
-        const lastBeforeClear = run.stage === Tuning.stages.length - 1;
-        if (!lastBeforeClear) {
-            // Like a player pressing the button the moment it lights up.
-            if (Economy.canExpand(run, Tuning)) {
-                run = Economy.expand(run, Tuning);
-                reachedAt.push(Math.round(run.time));
-                const info = Tuning.stages[run.stage - 1];
-                board = Board.expandBoard(board, fruitsFor(run.stage), info.cols, info.rows, rng).board;
-            }
-        } else if (Economy.canExpand(run, Tuning)) {
-            if (clearReadyAt === null) clearReadyAt = run.time;
-            if (run.time - clearReadyAt >= CLEAR_WAIT_SECONDS) run = Economy.expand(run, Tuning);
+        // Expanding is not optional: the shop grows the moment it can afford to.
+        if (Economy.canExpand(run, Tuning)) {
+            run = Economy.expand(run, Tuning);
+            reachedAt.push(Math.round(run.time));
+            const info = Tuning.stages[run.stage - 1];
+            board = Board.expandBoard(board, fruitsFor(run.stage), info.cols, info.rows, rng).board;
         }
     }
 
-    return { ended: run.ended || 'alive', time: run.time, stage: run.stage, score: Economy.finalScore(run, Tuning), reachedAt };
+    return { ended: run.ended || 'alive', time: run.time, stage: run.stage, score: Economy.finalScore(run), reachedAt };
 }
 
 function median(values) {
@@ -110,16 +102,16 @@ function formatTime(seconds) {
 
 const runsPerPlayer = Number(process.argv[2]) || 10;
 console.log(`runs per player: ${runsPerPlayer}`);
-console.log('player      | clears | median time | median stage | median score | stage reached at (median run)');
+console.log('player      | stage 7 | median time | median stage | median score | stage reached at (median run)');
 PLAYERS.forEach(player => {
     const runs = [];
     for (let seed = 1; seed <= runsPerPlayer; seed++) runs.push(playRun(player.interval, seed));
-    const clears = runs.filter(r => r.ended === 'clear').length;
+    const reachedLast = runs.filter(r => r.stage === Tuning.stages.length).length;
     const medianScore = median(runs.map(r => r.score));
     const typical = runs.find(r => r.score === medianScore);
     console.log([
         `${player.name} (${player.interval}s)`.padEnd(11),
-        `${clears}/${runs.length}`.padStart(6),
+        `${reachedLast}/${runs.length}`.padStart(7),
         formatTime(median(runs.map(r => r.time))).padStart(11),
         String(median(runs.map(r => r.stage))).padStart(12),
         medianScore.toLocaleString('en-US').padStart(12),

@@ -15,7 +15,7 @@ const T = {
         { name: 's4', cols: 6, rows: 6, fruits: 5, price: 7, rent: 40, logistics: 8, expandCost: 4000 },
         { name: 's5', cols: 6, rows: 7, fruits: 6, price: 8, rent: 50, logistics: 9, expandCost: 5000 },
         { name: 's6', cols: 7, rows: 7, fruits: 7, price: 9, rent: 100, logistics: 10, expandCost: 6000 },
-        { name: 's7', cols: 7, rows: 7, fruits: 7, price: 0, rent: 0, logistics: 0, expandCost: null }
+        { name: 's7', cols: 7, rows: 7, fruits: 7, price: 10, rent: 200, logistics: 12, expandCost: null }
     ],
     inflationRate: 1.5,
     inflationInterval: 30,
@@ -30,7 +30,6 @@ const T = {
     multiplierDecay: 0.02,
     dangerSeconds: 10,
     expandReserveSeconds: 10,
-    clearCashMultiplier: 2,
     leaderboardMinScore: 100000
 };
 
@@ -143,9 +142,9 @@ test('canExpand needs the expansion cost plus a reserve of the next stage\'s ren
     assert.equal(Economy.nextExpandCost(runAt({ stage: 3 }), T), 3000);
 });
 
-test('the reserve uses today\'s inflation and is not needed for the clear', () => {
+test('the reserve uses today\'s inflation, including for the last stage', () => {
     assert.equal(Economy.expandRequirement(runAt({ time: 30 }), T), 1000 + 20 * 1.5 * 10);
-    assert.equal(Economy.expandRequirement(runAt({ stage: 6 }), T), 6000);
+    assert.equal(Economy.expandRequirement(runAt({ stage: 6 }), T), 6000 + 200 * 10);
     assert.equal(Economy.expandRequirement(runAt({ stage: 7 }), T), null);
 });
 
@@ -170,13 +169,14 @@ test('expand does nothing without enough cash', () => {
     assert.equal(Economy.expand(before, T), before);
 });
 
-test('expanding from the last stage before the clear ends the run as a clear', () => {
-    const run = Economy.expand(runAt({ stage: 6, cash: 7000, revenue: 50000 }), T);
+test('the last stage is endless: expanding into it keeps the run going and it cannot grow further', () => {
+    const run = Economy.expand(runAt({ stage: 6, cash: 9000, revenue: 50000 }), T);
     assert.equal(run.stage, 7);
-    assert.equal(run.ended, 'clear');
+    assert.equal(run.ended, null);
+    assert.equal(run.cash, 3000);
     assert.equal(Economy.nextExpandCost(run, T), null);
     assert.equal(Economy.canExpand(run, T), false);
-    assert.equal(Economy.finalScore(run, T), 50000 + 6000 + 1000 * 2);
+    assert.equal(Economy.finalScore(run), 50000);
 });
 
 test('the run goes bankrupt at zero cash and scores its revenue', () => {
@@ -185,7 +185,7 @@ test('the run goes bankrupt at zero cash and scores its revenue', () => {
     const run = Economy.bankrupt(runAt({ cash: -3, revenue: 1234.7 }));
     assert.equal(run.ended, 'bankrupt');
     assert.equal(Economy.isBankrupt(run), false);
-    assert.equal(Economy.finalScore(run, T), 1234);
+    assert.equal(Economy.finalScore(run), 1234);
 });
 
 test('an ended run no longer pays anything', () => {
@@ -234,16 +234,3 @@ test('a normal run is not a tutorial run and still goes bankrupt', () => {
     assert.equal(Economy.isBankrupt(Economy.tick({ ...run, cash: 3 }, T, 1)), true);
 });
 
-test('a run starts outside overtime, can choose overtime, and leaves it by expanding', () => {
-    const run = Economy.createRun(T);
-    assert.equal(run.overtime, false);
-    const staying = Economy.stayOvertime({ ...run, cash: 1500 });
-    assert.equal(staying.overtime, true);
-    assert.equal(run.overtime, false);
-    assert.equal(Economy.expand(staying, T).overtime, false);
-});
-
-test('an ended run cannot go into overtime', () => {
-    const run = { ...Economy.createRun(T), ended: 'bankrupt' };
-    assert.equal(Economy.stayOvertime(run), run);
-});

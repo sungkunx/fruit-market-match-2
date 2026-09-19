@@ -28,8 +28,6 @@
             ended: null,
             // A practice (tutorial) run never goes bankrupt and never shows danger.
             tutorial: Boolean(options.tutorial),
-            // Chose to keep playing past an expansion offer: score only, no board items at this stage.
-            overtime: false,
             // Room for phase 2 cards (e.g. rent: 0.8 for -20% rent). Phase 1 keeps them at 1.
             modifiers: { rent: 1, labor: 1, logistics: 1, revenue: 1 }
         };
@@ -43,7 +41,7 @@
         return Math.pow(tuning.inflationRate, Math.floor(state.time / tuning.inflationInterval));
     }
 
-    // Extra rent that keeps climbing while the shop stays at the last stage before the clear.
+    // Extra rent that keeps climbing the longer the shop stays at the endless last stage.
     function surcharge(state, tuning) {
         if (state.stage !== tuning.surchargeStage) return 1;
         return Math.pow(tuning.surchargeRate, Math.floor(state.stageTime / tuning.surchargeInterval));
@@ -119,14 +117,12 @@
     }
 
     // Cash needed before expanding: the cost plus a reserve of the next stage's rent, so the
-    // bigger shop does not go bankrupt before its first sale. The clear needs no reserve.
-    // Only the cost is paid. Null at the last stage.
+    // bigger shop does not go bankrupt before its first sale. Only the cost is paid.
+    // Null at the last stage.
     function expandRequirement(state, tuning) {
         const cost = nextExpandCost(state, tuning);
         if (cost === null) return null;
-        const nextStage = state.stage + 1;
-        if (nextStage === tuning.stages.length) return cost;
-        return cost + projectedRent(state, tuning, nextStage) * tuning.expandReserveSeconds;
+        return cost + projectedRent(state, tuning, state.stage + 1) * tuning.expandReserveSeconds;
     }
 
     function canExpand(state, tuning) {
@@ -134,23 +130,15 @@
         return !state.ended && requirement !== null && state.cash >= requirement;
     }
 
-    // Pays for the next stage. Reaching the last stage ends the run as a clear.
+    // Pays for the next stage. The last stage is endless: the run goes on until bankruptcy.
     function expand(state, tuning) {
         if (!canExpand(state, tuning)) return state;
-        const stage = state.stage + 1;
         return {
             ...state,
             cash: state.cash - nextExpandCost(state, tuning),
-            stage,
-            stageTime: 0,
-            overtime: false,
-            ended: stage === tuning.stages.length ? 'clear' : null
+            stage: state.stage + 1,
+            stageTime: 0
         };
-    }
-
-    // Closing the expansion offer without expanding: keep playing this stage for score only.
-    function stayOvertime(state) {
-        return state.ended ? state : { ...state, overtime: true };
     }
 
     function isBankrupt(state) {
@@ -166,12 +154,8 @@
         return !state.ended && !state.tutorial && state.cash <= currentRent(state, tuning) * tuning.dangerSeconds;
     }
 
-    // Revenue is the score. A clear adds the building's value and doubles the cash left.
-    function finalScore(state, tuning) {
-        if (state.ended === 'clear') {
-            const buildingValue = tuning.stages[tuning.stages.length - 2].expandCost;
-            return Math.floor(state.revenue + buildingValue + state.cash * tuning.clearCashMultiplier);
-        }
+    // Revenue is the score.
+    function finalScore(state) {
         return Math.floor(state.revenue);
     }
 
@@ -192,7 +176,6 @@
         expandRequirement,
         canExpand,
         expand,
-        stayOvertime,
         isBankrupt,
         bankrupt,
         isInDanger,
