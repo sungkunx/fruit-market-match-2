@@ -1,6 +1,6 @@
 {
-  "name": "Fruit Market",
-  "short_name": "FruitMarket",
+  "name": "Fruit 2 Market",
+  "short_name": "Fruit2Market",
   "description": "Swipe fruits to line up 3 or more - Puzzle game",
   "start_url": "/",
   "display": "standalone",
