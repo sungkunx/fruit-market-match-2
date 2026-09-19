@@ -1382,23 +1382,16 @@ body.combo-bg-3 {
     border: 3px solid var(--wood-dark);
     border-radius: 12px;
     box-shadow: 0 4px 0 var(--wood-dark);
-    cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.expand-btn:disabled {
+.expand-btn:not(.ready) {
     opacity: 0.65;
-    cursor: default;
 }
 
 .expand-btn.ready {
     background: var(--gold);
     animation: expandWiggle 1.4s ease-in-out infinite;
-}
-
-.expand-btn:not(:disabled):active {
-    transform: translateY(3px);
-    box-shadow: 0 1px 0 var(--wood-dark);
 }
 
 .expand-title {
@@ -1483,13 +1476,6 @@ body.combo-bg-3 {
 .sheet-summary {
     font-size: 13px;
     color: var(--wood);
-}
-
-.sheet-note {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--awning-red);
-    text-align: center;
 }
 
 .sheet-buildings {
@@ -1853,22 +1839,6 @@ body.combo-bg-3 {
     box-shadow: 0 5px 0 var(--wood-dark);
     pointer-events: none;
     animation: coachIn 0.3s ease-out;
-}
-
-/* 확장 버튼 바로 아래에서 버튼을 가리킨다 */
-.coach-bubble.point-expand {
-    bottom: auto;
-    top: calc(clamp(170px, 27vh, 240px) - 14px);
-}
-
-.coach-bubble.point-expand::before {
-    content: '';
-    position: absolute;
-    right: 40px;
-    top: -16px;
-    border: 12px solid transparent;
-    border-top: 0;
-    border-bottom: 14px solid var(--wood-dark);
 }
 
 @keyframes coachIn {

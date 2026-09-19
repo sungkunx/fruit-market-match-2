@@ -20,7 +20,8 @@ const STAGE_TIPS = [
     '진열대가 넓어졌어요. 숨 돌릴 틈이에요',
     '과일 6종 — 같은 과일 연속 매치로 배율을 지키세요',
     '넓어진 진열대로 크게 벌 때예요',
-    '마지막 과일까지 입고! 백화점 임대료는 머무를수록 치솟아요'
+    '마지막 과일까지 입고! 다음은 끝없는 우주 영업이에요',
+    '끝없는 우주 영업! 버틸수록 임대료가 계속 올라요'
 ];
 
 let run = null;
@@ -33,13 +34,11 @@ let sheetOpen = false;
 let hiddenPause = false;
 let expanding = false;
 let stageCardOpen = false;
-let offeredStage = 0; // the stage whose expansion offer already popped up
 const TUTORIAL_KEY = 'fruitMarketTutorialDone';
 const PRACTICE_LINES = {
     1: '과일을 밀어 같은 과일 3개를 한 줄로 맞춰 보세요',
     2: '판 돈은 매출(점수)과 수익에 함께 쌓여요',
-    3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!',
-    4: '돈이 모였어요. 가게를 키워 보세요!'
+    3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!'
 };
 let practiceStep = 0; // 0 = not a practice run
 let practiceStepAt = 0;
@@ -589,66 +588,51 @@ function withRo(word) {
     return word + (finalConsonant === 0 || finalConsonant === 8 ? '로' : '으로');
 }
 
+// A sign showing how far the next expansion is. The shop grows by itself once it is reached.
 function updateExpandButton() {
-    const button = document.getElementById('expandBtn');
+    const sign = document.getElementById('expandBtn');
     const cost = Economy.nextExpandCost(run, rules);
     if (cost === null) {
-        button.hidden = true;
+        sign.hidden = true;
         return;
     }
-    button.hidden = false;
+    sign.hidden = false;
 
-    const isFinal = run.stage === rules.stages.length - 1;
     const nextName = stageInfo(run.stage + 1).name;
-    document.getElementById('expandTitle').textContent = isFinal
-        ? `${nextName} 세우기 · ${formatMoney(cost)}`
-        : `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
+    document.getElementById('expandTitle').textContent = `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
 
-    const ready = gameRunning && Economy.canExpand(run, rules) && (!run.tutorial || practiceStep === 4);
+    const ready = gameRunning && Economy.canExpand(run, rules);
     const shortfall = formatMoney(Economy.expandRequirement(run, rules) - Math.max(0, run.cash));
-    let hint = isFinal ? `수익 ${shortfall} 더 필요` : `준비금 포함 ${shortfall} 더 필요`;
-    if (ready) {
-        hint = isFinal ? '영업을 마치고 정산할 수 있어요' : '지금 확장할 수 있어요';
-        if (run.overtime) {
-            hint = '연장전 · 아이템 없이 점수만';
-        }
-    }
-    document.getElementById('expandHint').textContent = hint;
-    button.disabled = !ready;
-    button.classList.toggle('ready', ready);
+    document.getElementById('expandHint').textContent = ready ? '곧 확장해요!' : `준비금 포함 ${shortfall} 더 필요`;
+    sign.classList.toggle('ready', ready);
 }
 
+// The shop is about to grow: shows what changes, with a single button to go on.
 function openExpandSheet() {
-    if (!canAcceptInput() || !Economy.canExpand(run, rules) || (run.tutorial && practiceStep !== 4)) return;
+    if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
     sheetOpen = true;
 
     const cost = Economy.nextExpandCost(run, rules);
     const nextStage = run.stage + 1;
     const current = stageInfo(run.stage);
     const next = stageInfo(nextStage);
-    const isFinal = nextStage === rules.stages.length;
     const cashAfter = run.cash - cost;
     const nextRent = Economy.projectedRent(run, rules, nextStage);
 
-    document.getElementById('sheetTitle').textContent = isFinal
-        ? `${next.name}을 세울까요?`
-        : `${withRo(next.name)} 확장할까요?`;
+    document.getElementById('sheetTitle').textContent = `${withRo(next.name)} 확장!`;
     document.getElementById('sheetCost').textContent = '−' + formatMoney(cost);
-    document.getElementById('sheetSummary').textContent = isFinal
-        ? `영업을 마치고 정산합니다. 점수 = 매출 + 건물 가치 ${formatMoney(cost)} + 남은 수익 × ${rules.clearCashMultiplier}`
-        : `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)} · 새 임대료 ${Math.floor(cashAfter / nextRent)}초분 확보`;
+    document.getElementById('sheetSummary').textContent = `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)} · 새 임대료 ${Math.floor(cashAfter / nextRent)}초분 확보`;
 
     renderBuilding(document.getElementById('sheetFrom'), run.stage);
     renderBuilding(document.getElementById('sheetTo'), nextStage);
 
     const newFruit = rules.fruitOrder[next.fruits - 1];
-    const changes = isFinal
-        ? [['예상 점수', formatMoney(run.revenue + cost + cashAfter * rules.clearCashMultiplier)]]
-        : [
-            ['임대료', `${formatMoney(Economy.currentRent(run, rules))} → ${formatMoney(nextRent)} /초`],
-            ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
-            ['과일', next.fruits > current.fruits ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`, next.fruits > current.fruits ? fruitSrc(newFruit, '001') : null]
-        ];
+    const hasNewFruit = next.fruits > current.fruits;
+    const changes = [
+        ['임대료', `${formatMoney(Economy.currentRent(run, rules))} → ${formatMoney(nextRent)} /초`],
+        ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
+        ['과일', hasNewFruit ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`, hasNewFruit ? fruitSrc(newFruit, '001') : null]
+    ];
     const list = document.getElementById('sheetChanges');
     list.innerHTML = '';
     changes.forEach(([label, value, image]) => {
@@ -671,9 +655,7 @@ function openExpandSheet() {
         list.appendChild(item);
     });
 
-    document.getElementById('sheetConfirm').textContent = isFinal ? '세우고 영업 마치기' : '확장한다';
-    document.getElementById('sheetNote').hidden = run.tutorial;
-    document.getElementById('sheetCancel').textContent = run.tutorial ? '조금 더 벌고 올게요' : '좀 더 할게요 · 점수만';
+    document.getElementById('sheetConfirm').textContent = '확장하기';
     document.getElementById('expandSheet').classList.add('show');
 }
 
@@ -725,22 +707,12 @@ function closeExpandSheet() {
     document.getElementById('expandSheet').classList.remove('show');
 }
 
-// Opens the expand sheet by itself the first time the shop can grow at this stage.
+// The shop grows as soon as it can afford to: the sheet opens by itself when nothing else is on
+// screen. In the practice shop it waits until the rent lesson has been shown (step 4).
 function offerExpansion() {
-    if (run.tutorial || offeredStage === run.stage) return;
     if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
-    offeredStage = run.stage;
+    if (run.tutorial && practiceStep !== 4) return;
     openExpandSheet();
-}
-
-// Closing the sheet without expanding means playing on: overtime at this stage.
-function declineExpansion() {
-    if (!sheetOpen) return;
-    closeExpandSheet();
-    if (gameRunning && !run.tutorial) {
-        run = Economy.stayOvertime(run);
-        updateDashboard();
-    }
 }
 
 async function confirmExpand() {
@@ -762,15 +734,6 @@ async function confirmExpand() {
 
     await showNewBuilding();
     if (session !== gameSession) return;
-
-    if (run.ended === 'clear') {
-        await wait(600);
-        if (session !== gameSession) return;
-        isAnimating = false;
-        expanding = false;
-        endRun();
-        return;
-    }
 
     await growBoard(session);
     if (session !== gameSession) return;
@@ -891,7 +854,7 @@ function updateBoardInfo() {
     let text = `진열대 ${info.cols}×${info.rows} · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
     const surchargePercent = Math.round((Economy.surcharge(run, rules) - 1) * 100);
     if (surchargePercent > 0) {
-        text += ` · 백화점 할증 +${surchargePercent}%`;
+        text += ` · 할증 +${surchargePercent}%`;
     }
     document.getElementById('boardInfo').textContent = text;
 }
@@ -952,8 +915,8 @@ function endRun() {
     clearInterval(loopInterval);
     resumeGame();
     closeStageCard();
-    run = Economy.bankrupt(run); // keeps a clear as a clear
-    score = Economy.finalScore(run, rules);
+    run = Economy.bankrupt(run);
+    score = Economy.finalScore(run);
     updateDashboard();
     sendCustomersHome();
     GameAudio.stopMusic();
@@ -969,13 +932,12 @@ function endRun() {
 }
 
 function showResult() {
-    const cleared = run.ended === 'clear';
     const minutes = Math.floor(run.time / 60);
     const seconds = Math.floor(run.time % 60);
     const played = `${minutes}분 ${seconds}초`;
 
-    document.getElementById('resultTitle').textContent = cleared ? '클리어 — 우주 최강 건물 개업' : '파산 — 영업 종료';
-    document.getElementById('resultSubtitle').textContent = cleared ? `${played} 만에 개업` : `${played} 버팀 · 임대료에 무릎`;
+    document.getElementById('resultTitle').textContent = '파산 — 영업 종료';
+    document.getElementById('resultSubtitle').textContent = `${played} 버팀 · 임대료에 무릎`;
 
     const isNewPersonalBest = score > highestScore;
     document.getElementById('newRecordBadge').hidden = !isNewPersonalBest;
@@ -1032,9 +994,9 @@ function setPracticeStep(step) {
     practiceStepAt = run.time;
     clearHint();
     const bubble = document.getElementById('coachBubble');
-    bubble.classList.toggle('point-expand', step === 4);
-    document.getElementById('coachText').textContent = PRACTICE_LINES[step];
-    bubble.hidden = false;
+    const line = PRACTICE_LINES[step];
+    document.getElementById('coachText').textContent = line || '';
+    bubble.hidden = !line;
     if (step === 1) {
         showHint();
     }
@@ -1205,7 +1167,6 @@ function actuallyStartGame(practiceMode = false) {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
-    offeredStage = 0;
     practiceDoneOpen = false;
     practiceStep = 0;
     pointerStart = null;
@@ -1242,7 +1203,6 @@ function restartGame() {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
-    offeredStage = 0;
     practiceDoneOpen = false;
     practiceStep = 0;
     clearHint();
@@ -1662,16 +1622,12 @@ window.resetAndInitializeRankings = resetAndInitializeRankings;
 document.addEventListener('click', function(e) {
     const tutorialPopup = document.getElementById('tutorialPopup');
     const rankingPopup = document.getElementById('rankingPopup');
-    const expandSheet = document.getElementById('expandSheet');
 
     if (e.target === tutorialPopup) {
         closeTutorial();
     }
     if (e.target === rankingPopup) {
         closeRanking();
-    }
-    if (e.target === expandSheet) {
-        declineExpansion();
     }
     if (e.target === document.getElementById('stageCard')) {
         closeStageCard();
@@ -1683,9 +1639,6 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeTutorial();
         closeRanking();
-        if (sheetOpen) {
-            declineExpansion();
-        }
         if (stageCardOpen) {
             closeStageCard();
         }

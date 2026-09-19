@@ -78,10 +78,10 @@
             <div class="building-slot" id="buildingSlot"></div>
             <div class="crowd" id="crowd" aria-hidden="true"></div>
             <div class="ground"></div>
-            <button class="expand-btn" id="expandBtn" onclick="openExpandSheet()" disabled>
+            <div class="expand-btn" id="expandBtn">
                 <span class="expand-title" id="expandTitle"></span>
                 <span class="expand-hint" id="expandHint"></span>
-            </button>
+            </div>
         </div>
 
         <div class="dashboard">
@@ -132,9 +132,7 @@
                 <div class="mini-building" id="sheetTo"></div>
             </div>
             <div class="sheet-changes" id="sheetChanges"></div>
-            <p class="sheet-note" id="sheetNote">더 하면 이 단계에서는 아이템이 나오지 않아요. 점수만 올릴 수 있어요.</p>
             <button class="start-btn sheet-confirm" id="sheetConfirm" onclick="confirmExpand()">확장한다</button>
-            <button class="tutorial-btn sheet-cancel" id="sheetCancel" onclick="declineExpansion()">좀 더 할게요 · 점수만</button>
         </div>
     </div>
 
@@ -227,7 +225,7 @@
 
                 <div class="rule-section">
                     <div class="rule-title">🚀 우주 최강 건물</div>
-                    <div class="rule-text">백화점에서 우주 최강 건물을 세우면 클리어! 건물 가치와 남은 수익 두 배가 점수에 더해져요. 하지만 백화점 임대료는 머무를수록 치솟아요.</div>
+                    <div class="rule-text">백화점에서 돈이 모이면 우주 최강 건물로! 여기서부터는 끝없는 영업이에요. 버틸수록 임대료가 계속 오르니, 최대한 오래 버티며 매출을 올리세요.</div>
                 </div>
 
                 <button class="start-btn replay-practice-btn" onclick="startPracticeFromHelp()">🎓 튜토리얼 다시 하기</button>
