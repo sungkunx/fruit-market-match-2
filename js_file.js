@@ -54,14 +54,11 @@ let score = 0; // final score of the last finished run
 let lastScore = 0;
 let highestScore = 0;
 const missingBuildingImages = new Set();
-const missingCustomerImages = new Set();
-const CUSTOMER_SKINS = ['var(--skin-light)', 'var(--skin-tan)'];
-const CUSTOMER_SHIRTS = ['var(--awning-red)', 'var(--leaf)', 'var(--store-blue)', 'var(--violet)', 'var(--gold)', 'var(--sunset)'];
-const CUSTOMER_IMAGE_COUNT = 4;
+const CUSTOMER_COLORS = ['var(--awning-red)', 'var(--leaf)', 'var(--store-blue)', 'var(--violet)', 'var(--gold)', 'var(--sunset)'];
 const CUSTOMER_EDGE_X = 220; // px from the door where customers enter and leave
 const CUSTOMER_WALK_MS = 600;
 let crowd = Crowd.createCrowd();
-let customers = []; // oldest first: { element, x }
+let customers = []; // oldest first: { element, x, timer }
 let crowdClock = 0;
 
 const BULB_COUNT = 12;
@@ -451,7 +448,7 @@ function pickRandom(list) {
 function customerSpot(index) {
     const side = index % 2 === 0 ? -1 : 1;
     const rank = Math.floor(index / 2) + 1;
-    return { x: side * (4 + rank * 18), scale: 1 - rank * 0.03, layer: 20 - rank };
+    return { x: side * (4 + rank * 20), scale: 1 - rank * 0.03, layer: 20 - rank };
 }
 
 function layoutCustomers() {
@@ -463,52 +460,59 @@ function layoutCustomers() {
     });
 }
 
-// A CSS-drawn customer. Uses img/customer_N.png when it exists.
+// Turns the customer to face the way they are running.
+function faceCustomer(element, fromX, toX) {
+    element.firstChild.style.transform = toX < fromX ? 'scaleX(-1)' : 'scaleX(1)';
+}
+
+// A single-colour customer drawn with CSS: round head and body, two eyes.
 function createCustomerElement() {
     const element = document.createElement('div');
-    element.className = 'customer walking';
+    element.className = 'customer running';
 
-    const art = document.createElement('div');
-    art.className = 'customer-art';
-    art.style.setProperty('--skin', pickRandom(CUSTOMER_SKINS));
-    art.style.setProperty('--shirt', pickRandom(CUSTOMER_SHIRTS));
-    element.appendChild(art);
+    const flip = document.createElement('div');
+    flip.className = 'customer-flip';
 
-    const imageNumber = 1 + Math.floor(Math.random() * CUSTOMER_IMAGE_COUNT);
-    if (!missingCustomerImages.has(imageNumber)) {
-        const img = document.createElement('img');
-        img.alt = '';
-        img.draggable = false;
-        img.addEventListener('load', () => element.classList.add('has-image'));
-        img.addEventListener('error', () => {
-            missingCustomerImages.add(imageNumber);
-            img.remove();
-        });
-        img.src = `img/customer_${imageNumber}.png`;
-        element.appendChild(img);
-    }
+    const body = document.createElement('div');
+    body.className = 'customer-body';
+    body.style.setProperty('--c', pickRandom(CUSTOMER_COLORS));
+    body.style.animationDelay = `${(-Math.random()).toFixed(2)}s`; // everyone dances on their own beat
+
+    const eyes = document.createElement('div');
+    eyes.className = 'customer-eyes';
+
+    body.appendChild(eyes);
+    flip.appendChild(body);
+    element.appendChild(flip);
     return element;
 }
 
-// A customer walks in from the nearer edge and joins the queue.
+// A customer runs in from the nearer edge, joins the queue, and starts dancing.
 function addCustomer() {
     if (customers.length >= rules.crowdMax) return;
     const element = createCustomerElement();
-    const entryX = customerSpot(customers.length).x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
+    const spotX = customerSpot(customers.length).x;
+    const entryX = spotX < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
+    faceCustomer(element, entryX, spotX);
     element.style.transform = `translateX(${entryX}px)`;
     document.getElementById('crowd').appendChild(element);
-    customers.push({ element, x: entryX });
-    void element.offsetWidth; // start the walk from the edge
+
+    const customer = { element, x: entryX, timer: 0 };
+    customers.push(customer);
+    void element.offsetWidth; // start the run from the edge
     layoutCustomers();
-    setTimeout(() => element.classList.remove('walking'), CUSTOMER_WALK_MS);
+    customer.timer = setTimeout(() => element.classList.replace('running', 'dancing'), CUSTOMER_WALK_MS);
 }
 
-// The customer who has waited longest walks off; the rest step closer to the door.
+// The customer who has waited longest runs off; the rest step closer to the door.
 function removeOldestCustomer() {
     const customer = customers.shift();
     if (!customer) return;
+    clearTimeout(customer.timer);
     const exitX = customer.x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
-    customer.element.classList.add('walking');
+    customer.element.classList.remove('dancing');
+    customer.element.classList.add('running');
+    faceCustomer(customer.element, customer.x, exitX);
     customer.element.style.transform = `translateX(${exitX}px)`;
     customer.element.style.opacity = '0';
     setTimeout(() => customer.element.remove(), CUSTOMER_WALK_MS);
@@ -522,18 +526,9 @@ function sendCustomersHome() {
 }
 
 function clearCustomers() {
+    customers.forEach(customer => clearTimeout(customer.timer));
     customers = [];
     document.getElementById('crowd').innerHTML = '';
-}
-
-function hopRandomCustomer() {
-    const chance = run.combo.multiplier >= 2 ? 0.5 : 0.2;
-    if (customers.length === 0 || Math.random() >= chance) return;
-    const element = pickRandom(customers).element;
-    if (element.classList.contains('walking')) return;
-    element.classList.remove('hop');
-    void element.offsetWidth; // restart the CSS animation
-    element.classList.add('hop');
 }
 
 // Walks customers in or out toward the size the recent earning pace calls for.
@@ -547,7 +542,7 @@ function updateCrowd() {
             addCustomer();
         }
     }
-    hopRandomCustomer();
+    document.getElementById('crowd').classList.toggle('party', run.combo.multiplier >= 2);
 }
 
 // Draws the building for `stage` into `container`. Uses img/building_N.png when it exists.

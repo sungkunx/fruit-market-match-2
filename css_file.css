@@ -17,8 +17,6 @@
     --violet: #9B59B6;
     --night: #2B2356;
     --neon: #7FE3F5;
-    --skin-light: #F6D2B0;
-    --skin-tan: #D9A077;
     --outline: 2px 2px 0 var(--wood-dark), -2px 2px 0 var(--wood-dark), 2px -2px 0 var(--wood-dark), -2px -2px 0 var(--wood-dark);
 }
 
@@ -1610,84 +1608,110 @@ body.combo-bg-3 {
     pointer-events: none;
 }
 
+/* 줄 위치와 크기(transform)는 JS가 정하고, 걸어가는 이동은 transition이 그린다 */
 .customer {
     position: absolute;
     left: 50%;
     bottom: 0;
-    width: 18px;
-    height: 28px;
-    margin-left: -9px;
+    width: 22px;
+    height: 30px;
+    margin-left: -11px;
     transform-origin: bottom center;
     transition: transform 0.6s ease-out, opacity 0.6s ease-out;
 }
 
-.customer-art {
+/* 바라보는 방향(좌우 반전) */
+.customer-flip {
     position: absolute;
     inset: 0;
 }
 
-/* 몸통 */
-.customer-art::before {
+/* 달리기·춤 동작. 눈도 이 안에 있어서 함께 움직인다 */
+.customer-body {
+    position: absolute;
+    inset: 0;
+    transform-origin: bottom center;
+}
+
+/* 머리 */
+.customer-body::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 0;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    background: var(--c);
+    border: 3px solid var(--wood-dark);
+    border-radius: 50%;
+}
+
+/* 몸 */
+.customer-body::after {
     content: '';
     position: absolute;
     left: 1px;
     bottom: 0;
-    width: 16px;
-    height: 17px;
-    background: var(--shirt);
-    border: 2px solid var(--wood-dark);
-    border-radius: 8px 8px 4px 4px;
+    width: 20px;
+    height: 16px;
+    background: var(--c);
+    border: 3px solid var(--wood-dark);
+    border-radius: 10px 10px 5px 5px;
 }
 
-/* 머리 */
-.customer-art::after {
+.customer-eyes {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 5px;
+    z-index: 2;
+    height: 4px;
+}
+
+.customer-eyes::before,
+.customer-eyes::after {
     content: '';
     position: absolute;
-    left: 3px;
     top: 0;
-    width: 12px;
-    height: 12px;
-    background: var(--skin);
-    border: 2px solid var(--wood-dark);
+    width: 3px;
+    height: 4px;
+    background: var(--cream);
     border-radius: 50%;
 }
 
-.customer img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    object-position: bottom;
-    display: none;
+.customer-eyes::before {
+    left: 7px;
 }
 
-.customer.has-image img {
-    display: block;
+.customer-eyes::after {
+    right: 7px;
 }
 
-.customer.has-image .customer-art {
-    display: none;
+.customer.running .customer-body {
+    animation: customerRun 0.26s ease-in-out infinite alternate;
 }
 
-.customer.walking .customer-art,
-.customer.walking img {
-    animation: customerBob 0.2s ease-in-out infinite alternate;
+.customer.dancing .customer-body {
+    animation: customerDance 0.9s ease-in-out infinite;
 }
 
-.customer.hop .customer-art,
-.customer.hop img {
-    animation: customerHop 0.4s ease-out;
+/* 배율 x2 이상: 모두 신나게 */
+.crowd.party .customer.dancing .customer-body {
+    animation-duration: 0.6s;
 }
 
-@keyframes customerBob {
-    from { transform: translateY(0); }
-    to { transform: translateY(-3px); }
+@keyframes customerRun {
+    from { transform: translateY(0) rotate(12deg) scaleY(0.94); }
+    to { transform: translateY(-7px) rotate(12deg) scaleY(1.04); }
 }
 
-@keyframes customerHop {
-    0%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-8px); }
+@keyframes customerDance {
+    0% { transform: rotate(-12deg); }
+    25% { transform: translateY(-8px) scaleY(1.08); }
+    50% { transform: rotate(12deg); }
+    75% { transform: scaleX(1.15) scaleY(0.85); }
+    100% { transform: rotate(-12deg); }
 }
 
 /* ---------- 단계 안내 카드 ---------- */
@@ -1886,8 +1910,7 @@ body.combo-bg-3 {
         transition: none !important;
     }
 
-    .customer-art,
-    .customer img {
+    .customer-body {
         animation: none !important;
     }
 }
