@@ -217,3 +217,19 @@ test('no function changes the run it was given', () => {
     Economy.bankrupt(run);
     assert.deepEqual(run, copy);
 });
+
+test('a tutorial run never drops below zero cash, never goes bankrupt, and never shows danger', () => {
+    const run = Economy.createRun(T, { tutorial: true });
+    assert.equal(run.tutorial, true);
+    const drained = Economy.tick({ ...run, cash: 3 }, T, 1);
+    assert.equal(drained.cash, 0);
+    assert.equal(Economy.chargeSwap(drained, T).cash, 0);
+    assert.equal(Economy.isBankrupt(drained), false);
+    assert.equal(Economy.isInDanger(drained, T), false);
+});
+
+test('a normal run is not a tutorial run and still goes bankrupt', () => {
+    const run = Economy.createRun(T);
+    assert.equal(run.tutorial, false);
+    assert.equal(Economy.isBankrupt(Economy.tick({ ...run, cash: 3 }, T, 1)), true);
+});

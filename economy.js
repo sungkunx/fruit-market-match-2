@@ -13,7 +13,7 @@
         return tuning.stages[state.stage - 1];
     }
 
-    function createRun(tuning) {
+    function createRun(tuning, options = {}) {
         return {
             stage: 1,
             cash: tuning.startCash,
@@ -26,9 +26,15 @@
             maxChain: 0,
             swaps: 0,
             ended: null,
+            // A practice (tutorial) run never goes bankrupt and never shows danger.
+            tutorial: Boolean(options.tutorial),
             // Room for phase 2 cards (e.g. rent: 0.8 for -20% rent). Phase 1 keeps them at 1.
             modifiers: { rent: 1, labor: 1, logistics: 1, revenue: 1 }
         };
+    }
+
+    function keepTutorialCash(state, cash) {
+        return state.tutorial ? Math.max(0, cash) : cash;
     }
 
     function inflation(state, tuning) {
@@ -72,7 +78,7 @@
 
         return {
             ...state,
-            cash,
+            cash: keepTutorialCash(state, cash),
             time: round3(state.time + dt),
             stageTime: round3(state.stageTime + dt),
             logisticsTimer,
@@ -83,7 +89,7 @@
     // Labor is paid for every swap, including ones that bounce back.
     function chargeSwap(state, tuning) {
         if (state.ended) return state;
-        return { ...state, cash: state.cash - tuning.laborPerSwap * state.modifiers.labor, swaps: state.swaps + 1 };
+        return { ...state, cash: keepTutorialCash(state, state.cash - tuning.laborPerSwap * state.modifiers.labor), swaps: state.swaps + 1 };
     }
 
     // Prices a resolved move at the current stage. Does not change the run: the caller adds
@@ -140,7 +146,7 @@
     }
 
     function isBankrupt(state) {
-        return !state.ended && state.cash <= 0;
+        return !state.ended && !state.tutorial && state.cash <= 0;
     }
 
     function bankrupt(state) {
@@ -149,7 +155,7 @@
 
     // Danger: only enough cash left for a few seconds of rent.
     function isInDanger(state, tuning) {
-        return !state.ended && state.cash <= currentRent(state, tuning) * tuning.dangerSeconds;
+        return !state.ended && !state.tutorial && state.cash <= currentRent(state, tuning) * tuning.dangerSeconds;
     }
 
     // Revenue is the score. A clear adds the building's value and doubles the cash left.
