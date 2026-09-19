@@ -19,6 +19,7 @@ let gameRunning = false;
 let isAnimating = false;
 let sheetOpen = false;
 let hiddenPause = false;
+let expanding = false;
 let loopInterval;
 let gameSession = 0;
 let pointerStart = null;
@@ -252,7 +253,7 @@ function showFailedExpression(cells) {
 }
 
 function isPaused() {
-    return sheetOpen || hiddenPause;
+    return sheetOpen || hiddenPause || expanding;
 }
 
 function canAcceptInput() {
@@ -535,6 +536,7 @@ async function confirmExpand() {
     const session = gameSession;
     const previousFruits = activeFruits;
     isAnimating = true;
+    expanding = true;
     run = Economy.expand(run, Tuning);
     GameAudio.playSuccess(3);
     updateDashboard();
@@ -546,6 +548,7 @@ async function confirmExpand() {
         await wait(600);
         if (session !== gameSession) return;
         isAnimating = false;
+        expanding = false;
         endRun();
         return;
     }
@@ -558,6 +561,7 @@ async function confirmExpand() {
         showComboEffect(`${FRUIT_NAMES[newFruit]} 입고!`);
     }
     isAnimating = false;
+    expanding = false;
     if (gameRunning && Economy.isBankrupt(run)) {
         endRun();
     }
@@ -717,6 +721,7 @@ function endRun() {
     if (!gameRunning) return;
     gameRunning = false;
     clearInterval(loopInterval);
+    resumeGame();
     run = Economy.bankrupt(run); // keeps a clear as a clear
     score = Economy.finalScore(run, Tuning);
     updateDashboard();
@@ -880,6 +885,7 @@ function actuallyStartGame() {
     isAnimating = false;
     sheetOpen = false;
     hiddenPause = false;
+    expanding = false;
     pointerStart = null;
     comboLevel = -1; // forces the first update to set the effects
     shownRent = 0;
@@ -893,6 +899,7 @@ function actuallyStartGame() {
 
     GameAudio.startMusic();
     startLoop();
+    if (document.hidden) pauseForHidden();
 }
 
 function restartGame() {
@@ -902,6 +909,7 @@ function restartGame() {
     isAnimating = false;
     sheetOpen = false;
     hiddenPause = false;
+    expanding = false;
     pointerStart = null;
     clearInterval(loopInterval);
 
@@ -956,8 +964,8 @@ function loadGameData() {
 }
 
 function updateStartScreenStats() {
-    document.getElementById('lastScore').textContent = lastScore;
-    document.getElementById('highestScore').textContent = highestScore;
+    document.getElementById('lastScore').textContent = formatMoney(lastScore);
+    document.getElementById('highestScore').textContent = formatMoney(highestScore);
 }
 
 // Initialize title fruit animations
