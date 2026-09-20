@@ -3,6 +3,7 @@
 //   node tools/sim.js [runsPerPlayer]
 const Board = require('../board.js');
 const Economy = require('../economy.js');
+const Items = require('../items.js');
 const Tuning = require('../tuning.js');
 
 const PLAYERS = [
@@ -48,12 +49,29 @@ function validMoves(board) {
     return moves;
 }
 
+// The most common fruit on the board: what a player would aim a stock clear at.
+function fullestFruit(board) {
+    const counts = new Map();
+    board.forEach(line => line.forEach(fruit => counts.set(fruit, (counts.get(fruit) || 0) + 1)));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Using an item takes about as long as a swap, so it costs the bot one turn.
+function playItem(item, board, rng, fruits) {
+    if (item === 'reshelf') return { valid: false, board: Board.shuffle(board, rng) };
+    const cells = item === 'stock'
+        ? Board.cellsOfFruit(board, fullestFruit(board))
+        : Board.cellsAround(board, { row: Math.floor(board.length / 2), col: Math.floor(board[0].length / 2) }, Tuning.items.crateRadius);
+    return Board.resolveClear(board, cells, rng, fruits);
+}
+
 function playRun(interval, seed) {
     const rng = seededRng(seed);
     const first = Tuning.stages[0];
     let run = Economy.createRun(Tuning);
     let board = Board.createBoard(rng, fruitsFor(1), first.cols, first.rows);
     let nextSwapAt = interval;
+    let slots = [];
     const reachedAt = [];
 
     while (run.time < MAX_TIME && !run.ended) {
@@ -62,16 +80,37 @@ function playRun(interval, seed) {
         if (run.time >= nextSwapAt) {
             nextSwapAt += interval;
             if (!Board.hasPossibleMove(board)) board = Board.shuffle(board, rng);
-            const moves = validMoves(board);
-            const [a, b] = moves[Math.floor(rng() * moves.length)];
-            const moved = board[a.row][a.col];
-            const displaced = board[b.row][b.col];
-            run = Economy.chargeSwap(run, Tuning);
-            const result = Board.resolveMove(board, a, b, rng, fruitsFor(run.stage));
-            const scored = Economy.scoreMove(run, Tuning, result, moved, displaced);
-            scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
-            run = Economy.finishMove(run, scored, result.steps.length);
-            board = result.finalBoard;
+
+            // A full shelf pays out nothing, so the bot spends the turn using what it holds.
+            if (slots.length >= Tuning.items.slots) {
+                const item = slots[0];
+                slots = Items.useItem(slots, 0);
+                const played = playItem(item, board, rng, fruitsFor(run.stage));
+                if (!played.valid) {
+                    board = played.board;
+                } else {
+                    const fruit = Items.mainFruit(played.steps[0]);
+                    const scored = Economy.scoreMove(run, Tuning, played, fruit, fruit);
+                    scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
+                    run = Economy.finishMove(run, scored, played.steps.length);
+                    board = played.finalBoard;
+                    const extra = Items.dropFor(played, Tuning.items);
+                    if (extra) slots = Items.addItem(slots, extra, Tuning.items.slots);
+                }
+            } else {
+                const moves = validMoves(board);
+                const [a, b] = moves[Math.floor(rng() * moves.length)];
+                const moved = board[a.row][a.col];
+                const displaced = board[b.row][b.col];
+                run = Economy.chargeSwap(run, Tuning);
+                const result = Board.resolveMove(board, a, b, rng, fruitsFor(run.stage));
+                const scored = Economy.scoreMove(run, Tuning, result, moved, displaced);
+                scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
+                run = Economy.finishMove(run, scored, result.steps.length);
+                board = result.finalBoard;
+                const item = Items.dropFor(result, Tuning.items);
+                if (item) slots = Items.addItem(slots, item, Tuning.items.slots);
+            }
         }
 
         if (Economy.isBankrupt(run)) {

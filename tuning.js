@@ -10,10 +10,10 @@
         stages: [
             { name: '천막', cols: 5, rows: 5, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 1680 },
             { name: '좌판', cols: 6, rows: 5, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 9480 },
-            { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 34800 },
-            { name: '편의점', cols: 6, rows: 6, fruits: 5, price: 248, rent: 450, logistics: 21, expandCost: 63000 },
-            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 100800 },
-            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 1000000 },
+            { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 40000 },
+            { name: '편의점', cols: 6, rows: 6, fruits: 5, price: 248, rent: 450, logistics: 21, expandCost: 85000 },
+            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 140000 },
+            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 1200000 },
             { name: '우주 최강 건물', cols: 7, rows: 7, fruits: 7, price: 8100, rent: 9000, logistics: 540, expandCost: null }
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
@@ -41,7 +41,18 @@
         crowdWindowSeconds: 8,
         crowdPerRentPace: 3,
         crowdMax: 14,
-        crowdUpdateSeconds: 0.5
+        crowdUpdateSeconds: 0.5,
+        // Board-clearing items. A move pays the first condition it meets, so the strongest item
+        // hangs on the rarest feat.
+        items: {
+            slots: 2,
+            crateRadius: 1,
+            drops: [
+                { item: 'stock', minChain: 4, minGroup: 6 },
+                { item: 'crate', minChain: Infinity, minGroup: 5 },
+                { item: 'reshelf', minChain: 3, minGroup: Infinity }
+            ]
+        }
     };
 
     if (typeof module !== 'undefined' && module.exports) {

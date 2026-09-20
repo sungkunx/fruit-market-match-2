@@ -1431,6 +1431,90 @@ body.combo-bg-3 {
 
 /* ---------- 보드 프레임 ---------- */
 
+/* 아이템 슬롯: 게임판 바로 위 두 칸 */
+.item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(360px, calc(100vw - 16px));
+    margin: 6px 0 4px;
+}
+
+.item-slots {
+    display: flex;
+    gap: 6px;
+}
+
+.item-slot {
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--wood-dark);
+    background: var(--cream);
+    border: 3px solid var(--wood-dark);
+    border-radius: 12px;
+    box-shadow: 0 3px 0 var(--wood-dark);
+    cursor: pointer;
+}
+
+.item-slot:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--wood-dark);
+}
+
+.item-slot.empty {
+    width: 44px;
+    height: 32px;
+    background: rgba(90, 51, 16, 0.12);
+    border-style: dashed;
+    border-color: rgba(90, 51, 16, 0.4);
+    box-shadow: none;
+    cursor: default;
+}
+
+.item-slot .item-icon {
+    font-size: 18px;
+}
+
+.item-slot.armed {
+    background: var(--gold);
+    animation: itemArmed 0.7s ease-in-out infinite;
+}
+
+.item-slot.gained {
+    animation: itemGained 0.45s ease-out;
+}
+
+@keyframes itemArmed {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.25); }
+}
+
+@keyframes itemGained {
+    0% { transform: scale(0.4) rotate(-12deg); }
+    60% { transform: scale(1.15) rotate(4deg); }
+    100% { transform: scale(1); }
+}
+
+.item-hint {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--wood-dark);
+}
+
+/* 대상을 고르는 동안에는 판이 살짝 밝아진다 */
+.grid.picking {
+    filter: brightness(1.08);
+}
+
+.grid.picking .cell {
+    cursor: pointer;
+}
+
 .board-frame {
     --frame: min(360px, calc(100vw - 16px), calc(100vh - 430px));
     --cell: calc((var(--frame) - 32px) / 7);
@@ -2069,6 +2153,8 @@ body.combo-bg-3 {
     .cash-row.danger,
     .cost-line.cost-bump,
     .celebrate-flash,
+    .item-slot.armed,
+    .item-slot.gained,
     .customer.cheering .customer-body,
     .earning-float {
         animation: none !important;

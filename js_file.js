@@ -40,6 +40,8 @@ const PRACTICE_LINES = {
     2: '판 돈은 매출(점수)과 수익에 함께 쌓여요',
     3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!'
 };
+let itemSlots = [];
+let armedItem = null; // the slot index waiting for the player to pick a target
 let practiceStep = 0; // 0 = not a practice run
 let practiceStepAt = 0;
 let practiceDoneOpen = false;
@@ -315,6 +317,12 @@ function onGridPointerDown(event) {
     const cell = cellFromEvent(event);
     if (!cell) return;
 
+    if (armedItem !== null) {
+        event.preventDefault();
+        useArmedItem(cell);
+        return;
+    }
+
     event.preventDefault();
     document.getElementById('grid').setPointerCapture(event.pointerId);
     pointerStart = { pointerId: event.pointerId, cell, x: event.clientX, y: event.clientY };
@@ -402,6 +410,114 @@ async function handleSwap(a, b) {
     pulseMultiplier();
     updateDashboard();
     updateComboDisplay();
+    dropItemFor(result);
+
+    await finishTurn(session);
+}
+
+const ITEM_LOOKS = {
+    stock: { icon: '🧺', name: '재고 정리', hint: '팔아치울 과일을 고르세요' },
+    crate: { icon: '📦', name: '상자 굴리기', hint: '상자를 굴릴 자리를 고르세요' },
+    reshelf: { icon: '🔄', name: '진열 다시', hint: '' }
+};
+
+// Items come from the feats the game already asks for: long chains and big matches. A full
+// shelf pays out nothing, so holding on to them costs the next one.
+function dropItemFor(result) {
+    if (run.tutorial || !Items.hasRoom(itemSlots, rules.items.slots)) return;
+    const item = Items.dropFor(result, rules.items);
+    if (!item) return;
+    itemSlots = Items.addItem(itemSlots, item, rules.items.slots);
+    renderItemSlots(itemSlots.length - 1);
+    GameAudio.playPop();
+    showComboEffect(`${ITEM_LOOKS[item].name} 입고!`);
+}
+
+function renderItemSlots(gainedIndex = -1) {
+    const row = document.getElementById('itemSlots');
+    row.innerHTML = '';
+    for (let index = 0; index < rules.items.slots; index++) {
+        const item = itemSlots[index];
+        const slot = document.createElement('button');
+        slot.className = 'item-slot';
+        slot.type = 'button';
+        if (!item) {
+            slot.classList.add('empty');
+            slot.disabled = true;
+            slot.setAttribute('aria-label', '빈 자리');
+        } else {
+            const look = ITEM_LOOKS[item];
+            slot.innerHTML = `<span class="item-icon">${look.icon}</span><span class="item-name">${look.name}</span>`;
+            slot.onclick = () => onItemSlotClick(index);
+            if (armedItem === index) slot.classList.add('armed');
+            if (index === gainedIndex) slot.classList.add('gained');
+        }
+        row.appendChild(slot);
+    }
+    document.getElementById('itemHint').textContent = armedItem === null ? '' : ITEM_LOOKS[itemSlots[armedItem]].hint;
+    document.getElementById('grid').classList.toggle('picking', armedItem !== null);
+}
+
+function clearItems() {
+    itemSlots = [];
+    armedItem = null;
+    renderItemSlots();
+}
+
+// Reshuffling happens at once. The other two wait for the player to pick a target.
+async function onItemSlotClick(index) {
+    if (!canAcceptInput()) return;
+    const item = itemSlots[index];
+    if (armedItem === index) {
+        armedItem = null;
+        renderItemSlots();
+        return;
+    }
+    if (item !== 'reshelf') {
+        armedItem = index;
+        renderItemSlots();
+        return;
+    }
+
+    const session = gameSession;
+    itemSlots = Items.useItem(itemSlots, index);
+    armedItem = null;
+    renderItemSlots();
+    isAnimating = true;
+    GameAudio.playSuccess(2);
+    showComboEffect('진열 다시!');
+    await animateShuffle(Board.shuffle(board, Math.random), session);
+    if (session !== gameSession) return;
+    await finishTurn(session);
+}
+
+// The player picked the target for the armed item. No labour cost: the item is the move.
+async function useArmedItem(cell) {
+    const index = armedItem;
+    const item = itemSlots[index];
+    const cells = item === 'stock'
+        ? Board.cellsOfFruit(board, board[cell.row][cell.col])
+        : Board.cellsAround(board, cell, rules.items.crateRadius);
+    const result = Board.resolveClear(board, cells, Math.random, activeFruits);
+    if (!result.valid) return;
+
+    const session = gameSession;
+    itemSlots = Items.useItem(itemSlots, index);
+    armedItem = null;
+    renderItemSlots();
+    isAnimating = true;
+
+    const fruit = Items.mainFruit(result.steps[0]);
+    const scored = Economy.scoreMove(run, rules, result, fruit, fruit);
+    const completed = await playSteps(result.steps, scored, session);
+    if (!completed) return;
+
+    board = result.finalBoard;
+    run = Economy.finishMove(run, scored, result.steps.length);
+    pulseMultiplier();
+    updateDashboard();
+    updateComboDisplay();
+    dropItemFor(result);
 
     await finishTurn(session);
 }
@@ -1424,6 +1540,7 @@ function actuallyStartGame(practiceMode = false) {
     dangerShown = false;
     crowd = Crowd.createCrowd();
     crowdClock = 0;
+    clearItems();
     clearCustomers();
     clearShopGraph();
 
@@ -1472,6 +1589,7 @@ function restartGame() {
 
     comboLevel = 0;
     setComboEffects(0);
+    clearItems();
     stopCelebrating();
     clearCustomers();
     clearShopGraph();
@@ -1872,4 +1990,5 @@ updateSoundButtons();
 setupGridInput();
 newBoard(1);
 renderBuilding(document.getElementById('buildingSlot'), 1);
+renderItemSlots();
 fillStartCrowd();
