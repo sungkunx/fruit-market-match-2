@@ -969,7 +969,7 @@ body.combo-bg-3 {
     position: absolute;
     left: 0;
     right: 0;
-    top: 0;
+    top: 56px; /* 단계 뱃지와 소리·홈 버튼(위에서 10px, 높이 40px) 아래에서 시작한다 */
     bottom: 26px;
     z-index: 1;
     width: 100%;
