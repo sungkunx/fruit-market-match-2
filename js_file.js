@@ -434,6 +434,8 @@ function dropItemFor(result) {
 }
 
 function renderItemSlots(gainedIndex = -1) {
+    // The practice shop never pays items, so it does not show the shelf either.
+    document.querySelector('.item-row').hidden = Boolean(run && run.tutorial);
     const row = document.getElementById('itemSlots');
     row.innerHTML = '';
     for (let index = 0; index < rules.items.slots; index++) {

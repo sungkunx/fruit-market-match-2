@@ -1432,6 +1432,10 @@ body.combo-bg-3 {
 /* ---------- 보드 프레임 ---------- */
 
 /* 아이템 슬롯: 게임판 바로 위 두 칸 */
+.item-row[hidden] {
+    display: none;
+}
+
 .item-row {
     display: flex;
     align-items: center;
@@ -1516,7 +1520,7 @@ body.combo-bg-3 {
 }
 
 .board-frame {
-    --frame: min(360px, calc(100vw - 16px), calc(100vh - 430px));
+    --frame: min(360px, calc(100vw - 16px), calc(100vh - 470px));
     --cell: calc((var(--frame) - 32px) / 7);
     position: relative;
     width: var(--frame);
