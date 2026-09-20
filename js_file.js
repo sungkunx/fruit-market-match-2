@@ -50,6 +50,7 @@ let comboTextTimer;
 let comboLevel = 0;
 let shownRent = 0;
 let shownCash = 0;
+let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
@@ -381,7 +382,7 @@ async function handleSwap(a, b) {
     clearAnimations(b);
 
     const scored = Economy.scoreMove(run, rules, result, movedFruit, displacedFruit);
-    const completed = await playSteps(result.steps, scored.stepScores, session);
+    const completed = await playSteps(result.steps, scored, session);
     if (!completed) return;
 
     board = result.finalBoard;
@@ -398,20 +399,20 @@ async function handleSwap(a, b) {
 
 // Plays each pop-and-fall step in order and pays out as it goes.
 // Returns false if the game was left midway.
-async function playSteps(steps, stepScores, session) {
+async function playSteps(steps, scored, session) {
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         GameAudio.playSuccess(step.chain);
         await animatePop(step.cleared);
         if (session !== gameSession) return false;
 
-        run = Economy.addEarnings(run, stepScores[i]);
-        crowd = Crowd.recordEarning(crowd, stepScores[i], run.time, rules.crowdWindowSeconds);
+        run = Economy.addEarnings(run, scored.stepScores[i]);
+        crowd = Crowd.recordEarning(crowd, scored.stepScores[i], run.time, rules.crowdWindowSeconds);
         addCustomer();
         if (practiceStep === 1) {
             setPracticeStep(2);
         }
-        showEarning(stepScores[i]);
+        showGroupEarnings(step, scored.groupScores[i]);
         updateDashboard();
         if (step.chain >= 2) {
             showComboEffect(`CHAIN x${step.chain}!`);
@@ -436,13 +437,28 @@ async function finishTurn(session) {
     }
 }
 
-function showEarning(amount) {
-    if (amount <= 0) return;
-    const label = document.createElement('div');
-    label.className = 'earning-float';
-    label.textContent = '+' + formatMoney(amount);
-    document.getElementById('boardFrame').appendChild(label);
-    setTimeout(() => label.remove(), 900);
+// Each popped group shows what it sold for, right where it popped. Bigger money, bigger number.
+function showGroupEarnings(step, amounts) {
+    const frame = document.getElementById('boardFrame');
+    const frameBox = frame.getBoundingClientRect();
+    const basic = Economy.currentPrice(run, rules) * 3; // a plain three-fruit match
+
+    step.groups.forEach((group, index) => {
+        const amount = amounts[index];
+        if (amount <= 0) return;
+        const cell = group.cells[Math.floor(group.cells.length / 2)];
+        const cellBox = cellElements[cell.row][cell.col].getBoundingClientRect();
+
+        const label = document.createElement('div');
+        label.className = 'earning-float';
+        label.textContent = '+' + formatMoney(amount) + (step.chain >= 2 ? ` ×${step.chain}` : '');
+        const size = basic > 0 ? 16 + Math.log2(Math.max(1, amount / basic)) * 6 : 16;
+        label.style.fontSize = Math.round(Math.min(34, size)) + 'px';
+        label.style.left = (cellBox.left - frameBox.left + cellBox.width / 2) + 'px';
+        label.style.top = (cellBox.top - frameBox.top) + 'px';
+        frame.appendChild(label);
+        setTimeout(() => label.remove(), 900);
+    });
 }
 
 function pickRandom(list) {
@@ -785,9 +801,36 @@ async function growBoard(session) {
     grown.added.forEach(cell => clearAnimations(cell));
 }
 
+// The revenue number rolls up instead of jumping, and gives a little pop when it grows.
+function animateRevenue(target) {
+    const element = document.getElementById('revenue');
+    if (target === shownRevenue) return;
+    const from = shownRevenue;
+    shownRevenue = target;
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        element.textContent = formatMoney(target);
+        return;
+    }
+
+    element.classList.remove('revenue-pop');
+    void element.offsetWidth; // restart the CSS animation
+    element.classList.add('revenue-pop');
+
+    const session = gameSession;
+    const start = performance.now();
+    function frame(now) {
+        if (session !== gameSession) return;
+        const progress = Math.min(1, (now - start) / 300);
+        element.textContent = formatMoney(from + (target - from) * (1 - Math.pow(1 - progress, 3)));
+        if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
 function updateDashboard() {
     if (!run) return;
-    document.getElementById('revenue').textContent = formatMoney(run.revenue);
+    animateRevenue(run.revenue);
     document.getElementById('cash').textContent = formatMoney(Math.max(0, run.cash));
 
     const requirement = Economy.expandRequirement(run, rules);
@@ -1226,6 +1269,7 @@ function actuallyStartGame(practiceMode = false) {
     comboLevel = -1; // forces the first update to set the effects
     shownRent = 0;
     shownCash = 0;
+    shownRevenue = 0;
     rentFloatPending = 0;
     rentFloatClock = 0;
     dangerShown = false;
@@ -1272,6 +1316,7 @@ function restartGame() {
     GameAudio.setHurry(false);
     dangerShown = false;
     shownCash = 0;
+    shownRevenue = 0;
     rentFloatPending = 0;
     rentFloatClock = 0;
 

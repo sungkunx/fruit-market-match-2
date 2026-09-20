@@ -1397,10 +1397,7 @@ body.combo-bg-3 {
 
 .earning-float {
     position: absolute;
-    left: 50%;
-    top: 40%;
     z-index: 5;
-    font-size: 26px;
     font-weight: 700;
     color: var(--gold);
     text-shadow: var(--outline);
@@ -1413,6 +1410,16 @@ body.combo-bg-3 {
     0% { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
     20% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
     100% { opacity: 0; transform: translate(-50%, -50px) scale(1); }
+}
+
+.revenue-value.revenue-pop {
+    animation: revenuePop 0.3s ease-out;
+}
+
+@keyframes revenuePop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.12); }
+    100% { transform: scale(1); }
 }
 
 /* ---------- 일시정지 ---------- */
@@ -1946,6 +1953,7 @@ body.combo-bg-3 {
     .grid.combo-glow-2::after,
     .grid.combo-glow-3::after,
     .siren-active,
+    .revenue-value.revenue-pop,
     .cash-bar.gain,
     .cost-float,
     .coach-bubble,
