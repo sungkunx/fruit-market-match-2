@@ -1608,17 +1608,22 @@ function restartGame() {
     document.getElementById('sirenWarning').classList.remove('siren-active');
 }
 
-// Service Worker 등록
+// Service Worker 등록. 경로는 사이트가 하위 폴더에 올라가 있어도 맞도록 상대 경로로 둔다.
+// 새 버전이 자리를 잡으면 한 번만 새로고침해서 오래된 화면이 남지 않게 한다.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js')
-      .then(function(registration) {
-        console.log('ServiceWorker registration successful');
-      })
-      .catch(function(err) {
-        console.log('ServiceWorker registration failed: ', err);
-      });
-  });
+    // A first visit gets claimed by the new worker too; only an actual swap needs the reload.
+    const hadWorker = Boolean(navigator.serviceWorker.controller);
+    let reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!hadWorker || reloadedForUpdate) return;
+        reloadedForUpdate = true;
+        window.location.reload();
+    });
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (error) {
+            console.log('ServiceWorker registration failed: ', error);
+        });
+    });
 }
 
 // Save and load game data
