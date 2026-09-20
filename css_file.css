@@ -152,8 +152,25 @@ body.combo-bg-3 .sunburst {
     display: none;
 }
 
-body.combo-bg-3 .confetti {
+body.combo-bg-3 .confetti,
+body.celebrating .confetti {
     display: block;
+}
+
+/* 개업 축하: 화면이 한 번 금빛으로 번쩍 */
+.celebrate-flash {
+    position: fixed;
+    inset: 0;
+    z-index: 1055;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 40%, rgba(255, 197, 61, 0.9), rgba(255, 197, 61, 0) 65%);
+    animation: celebrateFlash 0.9s ease-out forwards;
+}
+
+@keyframes celebrateFlash {
+    0% { opacity: 0; transform: scale(0.7); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.3); }
 }
 
 .confetti span {
@@ -1876,10 +1893,53 @@ body.combo-bg-3 {
 }
 
 .stage-card-facts li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 6px 10px;
     background: var(--awning-cream);
     border: 2px solid var(--wood-light);
     border-radius: 10px;
+}
+
+/* 이번 단계에서 바뀐 항목은 모두 금색으로 강조 */
+.stage-card-facts li.changed {
+    background: var(--gold);
+    border: 3px solid var(--wood-dark);
+}
+
+.fact-label {
+    color: var(--wood);
+}
+
+.stage-card-facts li.changed .fact-label {
+    color: var(--wood-dark);
+}
+
+.fact-values {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fact-before {
+    color: var(--wood);
+    opacity: 0.65;
+    text-decoration: line-through;
+}
+
+.fact-arrow {
+    color: var(--wood-dark);
+}
+
+.fact-now {
+    color: var(--wood-dark);
+}
+
+.stage-card-facts li.changed .fact-now {
+    font-size: 16px;
+    color: var(--awning-red);
 }
 
 .stage-card-tip {
@@ -1974,11 +2034,14 @@ body.combo-bg-3 {
     .expand-btn.ready,
     .cash-row.danger,
     .cost-line.cost-bump,
+    .celebrate-flash,
     .earning-float {
         animation: none !important;
     }
 
-    body.combo-bg-3 .confetti {
+    body.combo-bg-3 .confetti,
+    body.celebrating .confetti,
+    .celebrate-flash {
         display: none;
     }
 

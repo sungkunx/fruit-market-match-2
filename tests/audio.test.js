@@ -76,3 +76,21 @@ test('the loop repeats every 64 steps', () => {
         assert.deepEqual(GameAudio.musicStep(step + 640, 1), GameAudio.musicStep(step, 1));
     }
 });
+
+test('the fanfare rises and finishes inside the pause it asks the music for', () => {
+    const notes = GameAudio.fanfareNotes();
+    assert.ok(notes.length >= 3);
+    assert.equal(notes[0].at, 0);
+    notes.forEach((note, index) => {
+        if (index === 0) return;
+        assert.ok(note.midi > notes[index - 1].midi, 'each note is higher than the last');
+        assert.ok(note.at > notes[index - 1].at, 'each note starts later than the last');
+    });
+    const end = Math.max(...notes.map(note => note.at + note.duration));
+    assert.ok(end <= GameAudio.fanfareSeconds, 'the last note ends before the music comes back');
+});
+
+test('fanfareNotes hands out a copy, so callers cannot edit the fanfare', () => {
+    GameAudio.fanfareNotes()[0].midi = 1;
+    assert.notEqual(GameAudio.fanfareNotes()[0].midi, 1);
+});

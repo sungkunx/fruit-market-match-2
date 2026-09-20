@@ -275,6 +275,40 @@
         });
     }
 
+    // A rising fanfare for a new shop: MIDI notes with their offset from the start, in seconds.
+    const FANFARE = [
+        { midi: 72, at: 0, duration: 0.2 },
+        { midi: 76, at: 0.13, duration: 0.2 },
+        { midi: 79, at: 0.26, duration: 0.2 },
+        { midi: 84, at: 0.39, duration: 0.45 },
+        { midi: 88, at: 0.6, duration: 0.75 }
+    ];
+    const FANFARE_SECONDS = 1.6;
+
+    // Pure: what the fanfare plays, safe to test in Node.
+    function fanfareNotes() {
+        return FANFARE.map(note => ({ ...note }));
+    }
+
+    // The background track steps aside for the fanfare, then picks up again.
+    function playFanfare() {
+        init();
+        if (!context) return FANFARE_SECONDS;
+        const wasPlaying = schedulerId !== null;
+        stopMusic();
+
+        const start = context.currentTime + 0.02;
+        playTone(sfxGain, start, { type: 'sine', freq: 180, endFreq: 60, peak: 0.6, duration: 0.25 });
+        FANFARE.forEach(note => {
+            const freq = midiToFreq(note.midi);
+            playTone(sfxGain, start + note.at, { type: 'triangle', freq, peak: 0.45, duration: note.duration });
+            playTone(sfxGain, start + note.at, { type: 'sine', freq: freq * 2, peak: 0.16, duration: note.duration });
+        });
+
+        if (wasPlaying) setTimeout(startMusic, FANFARE_SECONDS * 1000);
+        return FANFARE_SECONDS;
+    }
+
     function playFail() {
         if (!context) return;
         playTone(sfxGain, context.currentTime, { type: 'sawtooth', freq: 200, endFreq: 100, peak: 0.2, duration: 0.5 });
@@ -292,6 +326,9 @@
         playPop,
         playSuccess,
         playFail,
+        playFanfare,
+        fanfareNotes,
+        fanfareSeconds: FANFARE_SECONDS,
         musicStep
     };
 

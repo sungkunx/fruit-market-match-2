@@ -54,6 +54,9 @@ let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
+const CELEBRATE_MS = 2600; // how long the confetti keeps falling after a new shop opens
+const CELEBRATE_FLASH_MS = 900;
+let celebrateTimer = null;
 let dangerShown = false;
 let score = 0; // final score of the last finished run
 let lastScore = 0;
@@ -776,26 +779,54 @@ function openStageCard() {
         document.getElementById('stageCardFruitText').textContent = `${FRUIT_NAMES[newFruit]} 입고! 이제 과일 ${info.fruits}종`;
     }
 
-    const facts = [
-        `진열대 ${info.cols}×${info.rows}`,
-        `과일 1개 ${formatMoney(Economy.currentPrice(run, rules))}`,
-        `임대료 ${formatMoney(Economy.currentRent(run, rules))}/초 + 물류비 ${formatMoney(Economy.currentLogistics(run, rules))}/${rules.logisticsInterval}초`,
-        `물가 +${inflationPercent}%`
+    // The same run one stage back, so every row can show what this stage changed.
+    const before = previous ? { ...run, stage: stage - 1, stageTime: 0 } : null;
+    const upkeepText = state => `${formatMoney(Economy.currentRent(state, rules) + Economy.currentLogistics(state, rules) / rules.logisticsInterval)}/초`;
+    const rows = [
+        ['진열대', `${info.cols}×${info.rows}`, previous ? `${previous.cols}×${previous.rows}` : null],
+        ['과일', `${info.fruits}종`, previous ? `${previous.fruits}종` : null],
+        ['과일 1개 값', formatMoney(Economy.currentPrice(run, rules)), before ? formatMoney(Economy.currentPrice(before, rules)) : null],
+        ['유지비', upkeepText(run), before ? upkeepText(before) : null],
+        ['물가', `+${inflationPercent}%`, null]
     ];
-    if (!newFruit) {
-        facts.splice(1, 0, `과일 ${info.fruits}종`);
-    }
     const list = document.getElementById('stageCardFacts');
     list.innerHTML = '';
-    facts.forEach(text => {
-        const item = document.createElement('li');
-        item.textContent = text;
-        list.appendChild(item);
-    });
+    rows.forEach(([label, value, was]) => list.appendChild(stageCardRow(label, value, was)));
 
     document.getElementById('stageCardTip').textContent = STAGE_TIPS[stage - 1];
     stageCardOpen = true;
     document.getElementById('stageCard').classList.add('show');
+}
+
+// One line of the stage card. Anything this stage changed shows 이전 → 새 값 in the gold box.
+function stageCardRow(label, value, was) {
+    const item = document.createElement('li');
+    const changed = was !== null && was !== value;
+    if (changed) item.classList.add('changed');
+
+    const name = document.createElement('span');
+    name.className = 'fact-label';
+    name.textContent = label;
+    item.appendChild(name);
+
+    const values = document.createElement('span');
+    values.className = 'fact-values';
+    if (changed) {
+        const old = document.createElement('span');
+        old.className = 'fact-before';
+        old.textContent = was;
+        const arrow = document.createElement('span');
+        arrow.className = 'fact-arrow';
+        arrow.textContent = '→';
+        values.append(old, arrow);
+    }
+    const now = document.createElement('span');
+    now.className = 'fact-now';
+    now.textContent = value;
+    values.appendChild(now);
+
+    item.appendChild(values);
+    return item;
 }
 
 function closeStageCard() {
@@ -830,7 +861,8 @@ async function confirmExpand() {
     isAnimating = true;
     expanding = true;
     run = Economy.expand(run, rules);
-    GameAudio.playSuccess(3);
+    GameAudio.playFanfare();
+    celebrateStage();
     updateDashboard();
 
     await showNewBuilding();
@@ -851,6 +883,23 @@ async function confirmExpand() {
     if (gameRunning && Economy.isBankrupt(run)) {
         endRun();
     }
+}
+
+// Confetti rains and the screen flashes gold while the new shop opens.
+function celebrateStage() {
+    document.body.classList.add('celebrating');
+    const flash = document.createElement('div');
+    flash.className = 'celebrate-flash';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), CELEBRATE_FLASH_MS);
+    clearTimeout(celebrateTimer);
+    celebrateTimer = setTimeout(stopCelebrating, CELEBRATE_MS);
+}
+
+function stopCelebrating() {
+    clearTimeout(celebrateTimer);
+    document.body.classList.remove('celebrating');
+    document.querySelectorAll('.celebrate-flash').forEach(flash => flash.remove());
 }
 
 async function showNewBuilding() {
@@ -954,11 +1003,21 @@ function updateCostLine() {
     shownRent = upkeep;
 }
 
+// Where the green bar ends right now, in the cash row's own pixels. Kept a little inside the
+// track so a float never hangs off either end.
+function gaugeEdgeX() {
+    const bar = document.getElementById('cashBar');
+    const track = bar.parentElement;
+    const margin = Math.min(18, track.offsetWidth / 2);
+    const edge = Math.min(Math.max(bar.offsetWidth, margin), track.offsetWidth - margin);
+    return Math.round(track.offsetLeft + edge);
+}
+
 function upkeepPerSecond() {
     return Economy.currentRent(run, rules) + Economy.currentLogistics(run, rules) / rules.logisticsInterval;
 }
 
-// Money leaving the shop pops above the cash bar. Small amounts stay small and faint.
+// Money leaving the shop pops above the cash bar, right where the gauge stands now.
 function showCostFloat(amount) {
     if (amount <= 0) return;
     const upkeep = upkeepPerSecond();
@@ -970,7 +1029,7 @@ function showCostFloat(amount) {
     label.textContent = '−' + formatMoney(amount);
     label.style.fontSize = size + 'px';
     label.style.setProperty('--a', alpha);
-    label.style.left = (50 + Math.random() * 40).toFixed(0) + '%';
+    label.style.left = gaugeEdgeX() + 'px';
     document.getElementById('cashRow').appendChild(label);
     setTimeout(() => label.remove(), COST_FLOAT_MS);
 }
@@ -1408,6 +1467,7 @@ function restartGame() {
 
     comboLevel = 0;
     setComboEffects(0);
+    stopCelebrating();
     clearCustomers();
     clearShopGraph();
 
