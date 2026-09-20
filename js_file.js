@@ -61,8 +61,10 @@ let dangerShown = false;
 let score = 0; // final score of the last finished run
 let lastScore = 0;
 let highestScore = 0;
+let bestStage = 1; // the furthest the shop has ever grown, shown on the start screen
 const missingBuildingImages = new Set();
 const CUSTOMER_COLORS = ['var(--awning-red)', 'var(--leaf)', 'var(--store-blue)', 'var(--violet)', 'var(--gold)', 'var(--sunset)'];
+const START_CROWD_COUNT = 4; // customers waiting in front of the shop on the start screen
 const CUSTOMER_EDGE_X = 220; // px from the door where customers enter and leave
 const CUSTOMER_WALK_MS = 600;
 let crowd = Crowd.createCrowd();
@@ -1167,6 +1169,9 @@ function endRun() {
     if (score > highestScore) {
         highestScore = score;
     }
+    if (!run.tutorial && run.stage > bestStage) {
+        bestStage = run.stage;
+    }
     saveGameData();
     updateStartScreenStats();
 }
@@ -1500,7 +1505,8 @@ if ('serviceWorker' in navigator) {
 function saveGameData() {
     const gameData = {
         lastScore: lastScore,
-        highestScore: highestScore
+        highestScore: highestScore,
+        bestStage: bestStage
     };
     localStorage.setItem('fruitMarketGrowthData', JSON.stringify(gameData));
 }
@@ -1511,6 +1517,7 @@ function loadGameData() {
         const gameData = JSON.parse(savedData);
         lastScore = gameData.lastScore || 0;
         highestScore = gameData.highestScore || 0;
+        bestStage = Math.min(Tuning.stages.length, Math.max(1, gameData.bestStage || 1));
     }
     updateStartScreenStats();
 }
@@ -1518,78 +1525,33 @@ function loadGameData() {
 function updateStartScreenStats() {
     document.getElementById('lastScore').textContent = formatMoney(lastScore);
     document.getElementById('highestScore').textContent = formatMoney(highestScore);
+    document.getElementById('bestStageName').textContent = `${bestStage}단계 ${Tuning.stages[bestStage - 1].name}`;
+    renderBuilding(document.getElementById('startBuildingSlot'), bestStage);
 }
 
-// Initialize title fruit animations
-function initializeTitleAnimations() {
-    // 장식 과일 애니메이션 시작
-    startDecorationAnimations();
+// The shop the player has grown stands on the start screen, with a few customers dancing in front.
+function fillStartCrowd() {
+    const crowd = document.getElementById('startCrowd');
+    crowd.innerHTML = '';
+    for (let index = 0; index < START_CROWD_COUNT; index++) {
+        const element = createCustomerElement();
+        element.classList.replace('running', 'dancing');
+        const spot = customerSpot(index);
+        element.style.transform = `translateX(${spot.x}px) scale(${spot.scale})`;
+        element.style.zIndex = String(spot.layer);
+        crowd.appendChild(element);
+    }
 }
 
-// Start decoration fruit animations
-function startDecorationAnimations() {
-    const decorationFruits = document.querySelectorAll('.decoration-fruit');
-    
-    decorationFruits.forEach((fruit, index) => {
-        // 각 과일마다 다른 간격으로 표정 변경 (2-5초 사이)
-        const interval = 2000 + (index * 500) + Math.random() * 1000;
-        
-        setInterval(() => {
-            changeDecorationExpression(fruit);
-        }, interval);
-    });
-}
-
-// Change decoration fruit expression randomly
-function changeDecorationExpression(fruitElement) {
-    const fruitType = fruitElement.dataset.fruit;
-    
-    // 랜덤하게 표정 선택 (1-4번 프레임 중)
-    const expressions = ['001', '002', '003', '004'];
-    const randomExpression = expressions[Math.floor(Math.random() * expressions.length)];
-    
-    // 표정 변경
-    fruitElement.src = `img/fruit_${fruitType}_${randomExpression}.png`;
-    
-    // 약간의 스케일 효과 추가
-    fruitElement.style.transform = 'scale(1.1)';
-    
-    // 1초 후 원래 크기로 복원하고 기본 표정으로 돌아가기
-    setTimeout(() => {
-        fruitElement.style.transform = 'scale(1)';
-        // 50% 확률로 기본 표정으로 돌아가기
-        if (Math.random() < 0.5) {
-            fruitElement.src = `img/fruit_${fruitType}_001.png`;
-        }
-    }, 1000);
-}
-
-// Handle decoration fruit click
-function onDecorationFruitClick(fruitElement) {
-    const fruitType = fruitElement.dataset.fruit;
-    
-    // 현재 표정 확인
-    const currentSrc = fruitElement.src;
-    const currentFrame = currentSrc.substring(currentSrc.lastIndexOf('_') + 1, currentSrc.lastIndexOf('.'));
-    
-    // 현재 표정과 다른 표정들 중에서 랜덤 선택
-    const allExpressions = ['001', '002', '003', '004'];
-    const otherExpressions = allExpressions.filter(exp => exp !== currentFrame);
-    const randomExpression = otherExpressions[Math.floor(Math.random() * otherExpressions.length)];
-    
-    // 클릭 효과음 재생 (항상 재생)
+// Tapping the shop makes the queue hop.
+function cheerStartCrowd() {
     GameAudio.init();
     GameAudio.playPop();
-    
-    // 표정 변경
-    fruitElement.src = `img/fruit_${fruitType}_${randomExpression}.png`;
-    
-    // 클릭 애니메이션 효과
-    fruitElement.style.transform = 'scale(1.2)';
-    
-    setTimeout(() => {
-        fruitElement.style.transform = 'scale(1)';
-    }, 200);
+    document.querySelectorAll('#startCrowd .customer').forEach(customer => {
+        customer.classList.remove('cheering');
+        void customer.offsetWidth; // restart the CSS animation
+        customer.classList.add('cheering');
+    });
 }
 
 // Popup Functions
@@ -1910,4 +1872,4 @@ updateSoundButtons();
 setupGridInput();
 newBoard(1);
 renderBuilding(document.getElementById('buildingSlot'), 1);
-initializeTitleAnimations();
+fillStartCrowd();

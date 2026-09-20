@@ -31,31 +31,31 @@
             <img src="img/Fruit-Market-2-title.png" class="main-title-image" alt="Fruit 2 Market">
         </h1>
         
-        <div class="title-decorations">
-            <img src="img/fruit_banana_001.png" class="decoration-fruit" data-fruit="banana" alt="Banana" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_grape_001.png" class="decoration-fruit" data-fruit="grape" alt="Grape" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_strawberry_001.png" class="decoration-fruit" data-fruit="strawberry" alt="Strawberry" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_kiwi_001.png" class="decoration-fruit" data-fruit="kiwi" alt="Kiwi" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_cherry_001.png" class="decoration-fruit" data-fruit="cherry" alt="Cherry" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_apple_001.png" class="decoration-fruit" data-fruit="apple" alt="Apple" onclick="onDecorationFruitClick(this)">
-            <img src="img/fruit_orange_001.png" class="decoration-fruit" data-fruit="orange" alt="Orange" onclick="onDecorationFruitClick(this)">
-        </div>
-        
-        <div class="score-stats">
-            <div class="score-item">
-                <div class="score-title">📊 최근 점수</div>
-                <div class="score-value" id="lastScore">0</div>
-            </div>
-            <div class="score-item">
-                <div class="score-title">🏆 최고 점수</div>
-                <div class="score-value" id="highestScore">0</div>
-            </div>
+        <div class="price-tag best-tag">
+            <span class="price-tag-label">🏆 최고 매출</span>
+            <span class="price-tag-value" id="highestScore">0</span>
         </div>
 
         <div class="button-container">
-            <button class="tutorial-btn" onclick="showTutorial()">📖 게임 방법</button>
-            <button class="ranking-btn" onclick="showRanking()">🏆 이번 달 랭킹</button>
+            <div class="side-buttons">
+                <button class="tutorial-btn" onclick="showTutorial()">📖 게임 방법</button>
+                <button class="ranking-btn" onclick="showRanking()">🏆 이번 달 랭킹</button>
+            </div>
             <button class="start-btn" onclick="startGame()">🏪 개업하기</button>
+        </div>
+
+        <div class="start-yard" id="startYard">
+            <div class="price-tag yard-tag yard-tag-left">
+                <span class="price-tag-label">📊 최근 매출</span>
+                <span class="price-tag-value" id="lastScore">0</span>
+            </div>
+            <div class="price-tag yard-tag yard-tag-right">
+                <span class="price-tag-label">지금 내 가게</span>
+                <span class="price-tag-value" id="bestStageName">1단계 천막</span>
+            </div>
+            <div class="building-slot" id="startBuildingSlot" onclick="cheerStartCrowd()"></div>
+            <div class="crowd" id="startCrowd" aria-hidden="true"></div>
+            <div class="ground"></div>
         </div>
     </div>
 

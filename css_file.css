@@ -550,9 +550,10 @@ body.combo-bg-3 {
     height: 100%;
     background: transparent;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     flex-direction: column;
+    padding-top: 5vh;
     z-index: 2000;
 }
 
@@ -570,34 +571,6 @@ body.combo-bg-3 {
     object-fit: contain;
 }
 
-.title-decorations {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 0;
-    margin-bottom: 4px;
-    transform: scale(0.9);
-}
-
-.decoration-fruit {
-    width: 42px;
-    height: 42px;
-    object-fit: contain;
-    transition: transform 0.3s ease;
-    cursor: pointer;
-}
-
-.decoration-fruit:hover {
-    transform: scale(1.1);
-}
-
-.decoration-fruit:active {
-    transform: scale(0.95);
-}
-
-
-
 .button-container {
     display: flex;
     flex-direction: column;
@@ -606,16 +579,18 @@ body.combo-bg-3 {
     transform: scale(0.9);
 }
 
-.tutorial-btn, .ranking-btn, .start-btn {
-    padding: 14px 34px;
-    font-size: 18px;
-    min-width: 210px;
+.side-buttons {
+    display: flex;
+    gap: 10px;
 }
 
-.tutorial-btn,
-.ranking-btn {
+.tutorial-btn, .ranking-btn {
     background: var(--wood-light);
     color: var(--wood-dark);
+    padding: 10px 18px;
+    font-size: 15px;
+    border-radius: 14px;
+    box-shadow: 0 5px 0 var(--wood-dark);
 }
 
 .start-btn {
@@ -623,58 +598,117 @@ body.combo-bg-3 {
     color: var(--cream);
     font-size: 22px;
     padding: 16px 40px;
+    min-width: 210px;
 }
 
-.score-stats {
-    position: relative;
+/* 가게에 걸린 나무 가격표: 첫 화면의 기록은 모두 이 모양이다 */
+.price-tag {
     display: flex;
-    justify-content: space-between;
-    width: 100%;
-    max-width: 350px;
-    margin: 8px 20px 12px;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 14px;
+    text-align: center;
     background: var(--cream);
     border: 4px solid var(--wood-dark);
-    border-radius: 18px;
-    padding: 18px 20px;
-    box-shadow: 0 6px 0 var(--wood-dark);
-    transform: scale(0.9);
+    border-radius: 14px;
+    box-shadow: 0 5px 0 var(--wood-dark);
 }
 
-.score-stats::before,
-.score-stats::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--wood-dark);
-    opacity: 0.55;
-}
-
-.score-stats::before { left: 12px; }
-
-.score-stats::after { right: 12px; }
-
-.score-item {
-    text-align: center;
-    flex: 1;
-}
-
-.score-title {
-    font-size: 15px;
+.price-tag-label {
+    font-size: 12px;
     font-weight: 700;
-    color: var(--wood-dark);
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--wood);
 }
 
-.score-stats .score-value {
-    font-size: 28px;
+.price-tag-value {
+    font-size: 20px;
+    font-weight: 700;
     color: var(--awning-red);
-    text-shadow: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.best-tag {
+    margin: 0 0 14px;
+}
+
+/* 첫 화면 앞마당: 잔디 위에 내가 키운 가게와 손님들 */
+.start-yard {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 46vh;
+    min-height: 280px;
+    max-height: 380px;
+}
+
+/* 첫 화면의 가게는 크게 세운다. 작은 가게일수록 더 키워서 앞마당이 비어 보이지 않게 한다 */
+.start-yard .building {
+    transform: translateX(-50%) scale(calc(var(--start-scale, 1.2) * var(--yard-fit, 1)));
+    transform-origin: bottom center;
+}
+
+.start-yard .building[data-stage="1"] { --start-scale: 2.4; }
+.start-yard .building[data-stage="2"] { --start-scale: 1.9; }
+.start-yard .building[data-stage="3"] { --start-scale: 1.6; }
+.start-yard .building[data-stage="4"] { --start-scale: 1.35; }
+.start-yard .building[data-stage="5"] { --start-scale: 1.3; }
+.start-yard .building[data-stage="6"] { --start-scale: 1.15; }
+.start-yard .building[data-stage="7"] { --start-scale: 1; }
+
+/* 화면이 낮으면 가게를 줄여서 버튼과 겹치지 않게 한다 */
+@media (max-height: 780px) {
+    .start-yard { --yard-fit: 0.78; }
+    .start-screen { padding-top: 3vh; }
+    .main-title-image { height: 150px; }
+}
+
+@media (max-height: 680px) {
+    .start-yard { --yard-fit: 0.58; }
+    .main-title-image { height: 120px; }
+    .best-tag { margin-bottom: 8px; }
+}
+
+.start-yard .ground {
+    height: 38px;
+}
+
+.start-yard .building-slot {
+    inset: 0 0 12px;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.start-yard .crowd {
+    bottom: 30px;
+}
+
+.yard-tag {
+    position: absolute;
+    bottom: 150px;
+    z-index: 3;
+}
+
+.yard-tag-left {
+    left: max(10px, calc(50% - 175px));
+}
+
+.yard-tag-right {
+    right: max(10px, calc(50% - 175px));
+}
+
+.yard-tag .price-tag-value {
+    font-size: 17px;
+}
+
+.customer.cheering .customer-body {
+    animation: customerCheer 0.5s ease-out;
+}
+
+@keyframes customerCheer {
+    0% { transform: translateY(0); }
+    45% { transform: translateY(-16px) scaleY(1.1); }
+    100% { transform: translateY(0); }
 }
 
 /* Popup Styles */
@@ -2035,6 +2069,7 @@ body.combo-bg-3 {
     .cash-row.danger,
     .cost-line.cost-bump,
     .celebrate-flash,
+    .customer.cheering .customer-body,
     .earning-float {
         animation: none !important;
     }
