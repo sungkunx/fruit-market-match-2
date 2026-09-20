@@ -291,3 +291,43 @@ test('resolveMove steps replay correctly for many random games (property test)',
         }
     }
 });
+
+test('cellsOfFruit lists every cell holding that fruit', () => {
+    const board = parseBoard(['abc', 'bab', 'cba']);
+    assert.deepEqual(cellKeys(Board.cellsOfFruit(board, 'a')), ['0,0', '1,1', '2,2']);
+    assert.deepEqual(Board.cellsOfFruit(board, 'z'), []);
+});
+
+test('cellsAround covers the square around a cell and stops at the edges', () => {
+    const board = parseBoard(['abcd', 'efgh', 'ijkl', 'mnop']);
+    assert.equal(Board.cellsAround(board, { row: 1, col: 1 }, 1).length, 9);
+    assert.deepEqual(cellKeys(Board.cellsAround(board, { row: 0, col: 0 }, 1)), ['0,0', '0,1', '1,0', '1,1']);
+    assert.equal(Board.cellsAround(board, { row: 3, col: 3 }, 1).length, 4);
+});
+
+test('resolveClear sells the cells it was given and keeps the cascade going from chain 2', () => {
+    // Clearing the lone b lets the a's below fall into a line of three, which scores as chain 2.
+    const board = parseBoard(['apq', 'bqp', 'apq', 'aqp']);
+    const result = Board.resolveClear(board, [{ row: 1, col: 0 }], sequenceRng([0, 0.9]), ['p', 'q']);
+
+    assert.equal(result.valid, true);
+    assert.equal(result.steps.length, 2);
+    assert.equal(result.steps[0].kind, 'item');
+    assert.equal(result.steps[0].chain, 1);
+    assert.deepEqual(result.steps[0].groups, [{ fruit: 'b', cells: [{ row: 1, col: 0 }] }]);
+    assert.equal(result.steps[1].chain, 2);
+    assert.equal(result.steps[1].groups[0].fruit, 'a');
+    assert.deepEqual(result.finalBoard, result.steps[1].board);
+    assert.deepEqual(Board.findMatches(result.finalBoard), []);
+});
+
+test('resolveClear groups the cleared cells by fruit and ignores repeats and cells off the board', () => {
+    const board = parseBoard(['ab', 'ba']);
+    const result = Board.resolveClear(board, [{ row: 0, col: 0 }, { row: 0, col: 0 }, { row: 1, col: 1 }, { row: 9, col: 9 }], seededRng(2), ['a', 'b']);
+    assert.deepEqual(result.steps[0].groups, [{ fruit: 'a', cells: [{ row: 0, col: 0 }, { row: 1, col: 1 }] }]);
+    assert.equal(result.steps[0].cleared.length, 2);
+});
+
+test('resolveClear refuses an empty clear', () => {
+    assert.deepEqual(Board.resolveClear(parseBoard(['ab', 'ba']), [{ row: 5, col: 5 }], seededRng(1), ['a', 'b']), { valid: false });
+});

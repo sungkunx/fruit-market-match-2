@@ -173,6 +173,58 @@
         return { valid: true, swappedBoard, steps, finalBoard };
     }
 
+    function cellsOfFruit(board, fruit) {
+        const cells = [];
+        board.forEach((line, row) => line.forEach((value, col) => {
+            if (value === fruit) cells.push({ row, col });
+        }));
+        return cells;
+    }
+
+    function cellsAround(board, cell, radius) {
+        const cells = [];
+        for (let row = cell.row - radius; row <= cell.row + radius; row++) {
+            for (let col = cell.col - radius; col <= cell.col + radius; col++) {
+                if (inBounds(board, { row, col })) cells.push({ row, col });
+            }
+        }
+        return cells;
+    }
+
+    // An item clears cells outright. The clear itself is chain 1, so whatever falls into place
+    // afterwards pays the chain bonus from 2 up, exactly like the cascade after a swap.
+    function resolveClear(board, cells, rng, fruits) {
+        const seen = new Set();
+        const cleared = cells.filter(cell => {
+            const key = `${cell.row},${cell.col}`;
+            if (!inBounds(board, cell) || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        if (cleared.length === 0) return { valid: false };
+
+        const groups = [];
+        cleared.forEach(cell => {
+            const fruit = board[cell.row][cell.col];
+            const group = groups.find(entry => entry.fruit === fruit);
+            if (group) group.cells.push(cell);
+            else groups.push({ fruit, cells: [cell] });
+        });
+
+        const collapsed = clearAndCollapse(board, cleared, rng, fruits);
+        const first = {
+            kind: 'item',
+            chain: 1,
+            groups,
+            cleared,
+            falls: collapsed.falls,
+            spawns: collapsed.spawns,
+            board: collapsed.board
+        };
+        const after = cascade(collapsed.board, rng, fruits, 2);
+        return { valid: true, steps: [first, ...after.steps], finalBoard: after.finalBoard };
+    }
+
     // The swap that pops the most cells right away. Ties keep the first one found
     // (top to bottom, left to right, right neighbor before bottom neighbor).
     function findBestMove(board) {
@@ -306,6 +358,9 @@
         clearAndCollapse,
         cascade,
         resolveMove,
+        cellsOfFruit,
+        cellsAround,
+        resolveClear,
         findBestMove,
         hasPossibleMove,
         pickFruits,
