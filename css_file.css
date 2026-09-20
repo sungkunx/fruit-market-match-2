@@ -1227,34 +1227,80 @@ body.combo-bg-3 {
 }
 
 .cash-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 6px;
+    margin-top: 8px;
 }
 
 .cash-bar-track {
+    position: relative;
     flex: 1;
-    height: 14px;
+    height: 28px;
     background: var(--awning-cream);
     border: 3px solid var(--wood-dark);
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
 }
 
-.cash-bar {
+/* 줄어든 만큼 잠깐 남았다가 따라 내려오는 빨간 잔상 */
+.cash-bar-ghost {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
     width: 0;
-    height: 100%;
+    background: var(--awning-red);
+    transition: width 0.55s ease-out 0.12s;
+}
+
+.cash-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
     background: var(--leaf);
-    transition: width 0.15s linear, background 0.3s ease;
+    transition: width 0.12s linear, background 0.3s ease;
+}
+
+.cash-bar.gain {
+    animation: cashGain 0.35s ease-out;
+}
+
+@keyframes cashGain {
+    from { filter: brightness(1.7); }
+    to { filter: brightness(1); }
+}
+
+.cash-ticks {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    pointer-events: none;
+}
+
+.cash-ticks span {
+    flex: 1;
+    border-right: 1px solid rgba(90, 51, 16, 0.25);
+}
+
+.cash-ticks span:last-child {
+    border-right: 0;
 }
 
 .cash-value {
-    min-width: 72px;
-    text-align: right;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 16px;
     font-weight: 700;
+    color: var(--wood-dark);
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 0 var(--awning-cream);
 }
 
 .cash-row.danger .cash-bar {
@@ -1262,7 +1308,8 @@ body.combo-bg-3 {
 }
 
 .cash-row.danger .cash-value {
-    color: var(--awning-red);
+    color: var(--cream);
+    text-shadow: 1px 1px 0 var(--wood-dark);
 }
 
 .cash-row.danger {
@@ -1274,11 +1321,40 @@ body.combo-bg-3 {
     50% { opacity: 0.45; }
 }
 
+/* 빠져나가는 돈: 작으면 작고 연하게, 크면 크고 진하게 */
+.cost-float {
+    position: absolute;
+    bottom: 100%;
+    transform: translateX(-50%);
+    font-weight: 700;
+    color: var(--awning-red);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    animation: costFloat 0.9s ease-out forwards;
+}
+
+@keyframes costFloat {
+    0% { opacity: 0; transform: translate(-50%, 6px); }
+    25% { opacity: var(--a, 1); }
+    100% { opacity: 0; transform: translate(-50%, -22px); }
+}
+
 .cost-line {
-    margin-top: 4px;
-    text-align: right;
-    font-size: 11px;
+    margin-top: 6px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    font-size: 13px;
     color: var(--wood);
+}
+
+.cost-chip {
+    padding: 2px 8px;
+    font-weight: 700;
+    background: var(--awning-cream);
+    border: 2px solid var(--wood-light);
+    border-radius: 10px;
 }
 
 .cost-line.cost-bump {
@@ -1870,6 +1946,8 @@ body.combo-bg-3 {
     .grid.combo-glow-2::after,
     .grid.combo-glow-3::after,
     .siren-active,
+    .cash-bar.gain,
+    .cost-float,
     .coach-bubble,
     .cell.hint,
     .stage-card,
@@ -1885,6 +1963,10 @@ body.combo-bg-3 {
     }
 
     .customer {
+        transition: none !important;
+    }
+
+    .cash-bar-ghost {
         transition: none !important;
     }
 

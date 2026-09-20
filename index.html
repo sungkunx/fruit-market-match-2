@@ -97,8 +97,12 @@
             </div>
             <div class="cash-row" id="cashRow">
                 <span class="dash-label">수익</span>
-                <div class="cash-bar-track"><div class="cash-bar" id="cashBar"></div></div>
-                <span class="cash-value" id="cash">0</span>
+                <div class="cash-bar-track">
+                    <div class="cash-bar-ghost" id="cashBarGhost"></div>
+                    <div class="cash-bar" id="cashBar"></div>
+                    <div class="cash-ticks" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="cash-value" id="cash">0</span>
+                </div>
             </div>
             <div class="cost-line" id="costLine"></div>
         </div>

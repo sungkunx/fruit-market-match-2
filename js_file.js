@@ -49,6 +49,10 @@ let pointerStart = null;
 let comboTextTimer;
 let comboLevel = 0;
 let shownRent = 0;
+let shownCash = 0;
+let rentFloatPending = 0; // rent adds up for a second before it pops as one number
+let rentFloatClock = 0;
+const COST_FLOAT_MS = 900;
 let dangerShown = false;
 let score = 0; // final score of the last finished run
 let lastScore = 0;
@@ -353,6 +357,7 @@ async function handleSwap(a, b) {
     const movedFruit = board[a.row][a.col];
     const displacedFruit = board[b.row][b.col];
     run = Economy.chargeSwap(run, rules);
+    showCostFloat(rules.laborPerSwap * run.modifiers.labor);
     updateDashboard();
     const result = Board.resolveMove(board, a, b, Math.random, activeFruits);
 
@@ -679,7 +684,8 @@ function openStageCard() {
     const facts = [
         `진열대 ${info.cols}×${info.rows}`,
         `과일 1개 ${formatMoney(Economy.currentPrice(run, rules))}`,
-        `임대료 ${formatMoney(Economy.currentRent(run, rules))}/초 · 물가 +${inflationPercent}%`
+        `임대료 ${formatMoney(Economy.currentRent(run, rules))}/초 + 물류비 ${formatMoney(Economy.currentLogistics(run, rules))}/${rules.logisticsInterval}초`,
+        `물가 +${inflationPercent}%`
     ];
     if (!newFruit) {
         facts.splice(1, 0, `과일 ${info.fruits}종`);
@@ -786,7 +792,16 @@ function updateDashboard() {
 
     const requirement = Economy.expandRequirement(run, rules);
     const ratio = requirement ? Math.min(1, Math.max(0, run.cash) / requirement) : 1;
-    document.getElementById('cashBar').style.width = (ratio * 100).toFixed(1) + '%';
+    const width = (ratio * 100).toFixed(1) + '%';
+    const bar = document.getElementById('cashBar');
+    if (run.cash > shownCash) {
+        bar.classList.remove('gain');
+        void bar.offsetWidth; // restart the CSS animation
+        bar.classList.add('gain');
+    }
+    shownCash = run.cash;
+    bar.style.width = width;
+    document.getElementById('cashBarGhost').style.width = width;
 
     updateCostLine();
     updateMultiplier();
@@ -796,19 +811,46 @@ function updateDashboard() {
     updatePractice();
 }
 
+// Two chips instead of three costs: everything that drains per second, and what one move costs.
 function updateCostLine() {
-    const rent = Math.round(Economy.currentRent(run, rules));
+    const upkeep = Math.round(upkeepPerSecond());
     const labor = rules.laborPerSwap * run.modifiers.labor;
-    const logistics = Math.round(Economy.currentLogistics(run, rules));
     const line = document.getElementById('costLine');
-    line.textContent = `임대료 −${formatMoney(rent)}/초 · 인건비 −${formatMoney(labor)}/스왑 · 물류비 −${formatMoney(logistics)}/${rules.logisticsInterval}초`;
+    line.innerHTML = '';
+    [`유지비 −${formatMoney(upkeep)}/초`, `한 수 −${formatMoney(labor)}`].forEach(text => {
+        const chip = document.createElement('span');
+        chip.className = 'cost-chip';
+        chip.textContent = text;
+        line.appendChild(chip);
+    });
 
-    if (shownRent > 0 && rent > shownRent) {
+    if (shownRent > 0 && upkeep > shownRent) {
         line.classList.remove('cost-bump');
         void line.offsetWidth; // restart the CSS animation
         line.classList.add('cost-bump');
     }
-    shownRent = rent;
+    shownRent = upkeep;
+}
+
+function upkeepPerSecond() {
+    return Economy.currentRent(run, rules) + Economy.currentLogistics(run, rules) / rules.logisticsInterval;
+}
+
+// Money leaving the shop pops above the cash bar. Small amounts stay small and faint.
+function showCostFloat(amount) {
+    if (amount <= 0) return;
+    const upkeep = upkeepPerSecond();
+    const ratio = upkeep > 0 ? amount / upkeep : 10;
+    const [size, alpha] = ratio < 1.5 ? [11, 0.45] : ratio < 4 ? [15, 0.7] : ratio < 10 ? [20, 0.9] : [26, 1];
+
+    const label = document.createElement('div');
+    label.className = 'cost-float';
+    label.textContent = '−' + formatMoney(amount);
+    label.style.fontSize = size + 'px';
+    label.style.setProperty('--a', alpha);
+    label.style.left = (50 + Math.random() * 40).toFixed(0) + '%';
+    document.getElementById('cashRow').appendChild(label);
+    setTimeout(() => label.remove(), COST_FLOAT_MS);
 }
 
 function updateMultiplier() {
@@ -891,7 +933,18 @@ function showComboEffect(text) {
 // Game time only moves while nothing is paused. Bankruptcy waits for the move on screen.
 function onTick() {
     if (!gameRunning || isPaused()) return;
+    const logisticsTimerBefore = run.logisticsTimer;
+    rentFloatPending += Economy.currentRent(run, rules) * TICK_SECONDS;
     run = Economy.tick(run, rules, TICK_SECONDS);
+    if (run.logisticsTimer < logisticsTimerBefore) {
+        showCostFloat(Economy.currentLogistics(run, rules));
+    }
+    rentFloatClock += TICK_SECONDS;
+    if (rentFloatClock >= 1 - 1e-9) {
+        showCostFloat(rentFloatPending);
+        rentFloatPending = 0;
+        rentFloatClock = 0;
+    }
     updateDashboard();
     crowdClock += TICK_SECONDS;
     if (crowdClock >= rules.crowdUpdateSeconds - 1e-9) {
@@ -1172,6 +1225,9 @@ function actuallyStartGame(practiceMode = false) {
     pointerStart = null;
     comboLevel = -1; // forces the first update to set the effects
     shownRent = 0;
+    shownCash = 0;
+    rentFloatPending = 0;
+    rentFloatClock = 0;
     dangerShown = false;
     crowd = Crowd.createCrowd();
     crowdClock = 0;
@@ -1215,6 +1271,9 @@ function restartGame() {
     GameAudio.stopMusic();
     GameAudio.setHurry(false);
     dangerShown = false;
+    shownCash = 0;
+    rentFloatPending = 0;
+    rentFloatClock = 0;
 
     comboLevel = 0;
     setComboEffects(0);
