@@ -65,6 +65,10 @@ const CUSTOMER_WALK_MS = 600;
 let crowd = Crowd.createCrowd();
 let customers = []; // oldest first: { element, x, timer }
 let crowdClock = 0;
+let history = History.createHistory();
+let graphClock = 0;
+const GRAPH_WINDOW_SECONDS = 30;
+const GRAPH_SAMPLE_SECONDS = 0.5;
 
 const BULB_COUNT = 12;
 const CONFETTI_COUNT = 24;
@@ -566,6 +570,81 @@ function updateCrowd() {
     document.getElementById('crowd').classList.toggle('party', run.combo.multiplier >= 2);
 }
 
+// Reads a colour straight from the theme: canvas cannot resolve CSS variables itself.
+function themeColor(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// The last 30 seconds behind the shop: revenue as a filled slope, cash as a line.
+function drawShopGraph() {
+    const canvas = document.getElementById('shopGraph');
+    const ratio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const heightPx = canvas.clientHeight;
+    if (width === 0 || heightPx === 0) return;
+    if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(heightPx * ratio)) {
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(heightPx * ratio);
+    }
+
+    const context = canvas.getContext('2d');
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, heightPx);
+
+    const samples = History.samplesIn(history, run.time, GRAPH_WINDOW_SECONDS);
+    if (samples.length < 2) return;
+
+    const start = run.time - GRAPH_WINDOW_SECONDS;
+    const x = sample => ((sample.time - start) / GRAPH_WINDOW_SECONDS) * width;
+    const top = heightPx * 0.12;
+    const bottom = heightPx * 0.96;
+
+    const range = History.revenueRange(samples);
+    const revenueY = sample => bottom - ((sample.revenue - range.min) / (range.max - range.min)) * (bottom - top);
+
+    context.beginPath();
+    context.moveTo(x(samples[0]), revenueY(samples[0]));
+    samples.forEach(sample => context.lineTo(x(sample), revenueY(sample)));
+    context.lineTo(x(samples[samples.length - 1]), heightPx);
+    context.lineTo(x(samples[0]), heightPx);
+    context.closePath();
+    context.globalAlpha = 0.3;
+    context.fillStyle = themeColor('--violet');
+    context.fill();
+
+    context.globalAlpha = 0.85;
+    context.lineWidth = 3;
+    context.strokeStyle = themeColor('--violet');
+    context.beginPath();
+    samples.forEach((sample, index) => {
+        context[index === 0 ? 'moveTo' : 'lineTo'](x(sample), revenueY(sample));
+    });
+    context.stroke();
+
+    const requirement = Economy.expandRequirement(run, rules);
+    const cashTop = requirement || Math.max(1, ...samples.map(sample => sample.cash));
+    const cashY = sample => bottom - Math.min(1, Math.max(0, sample.cash) / cashTop) * (bottom - top);
+
+    context.globalAlpha = 0.75;
+    context.lineWidth = 3;
+    context.strokeStyle = themeColor(Economy.isInDanger(run, rules) ? '--awning-red' : '--leaf');
+    context.beginPath();
+    samples.forEach((sample, index) => {
+        context[index === 0 ? 'moveTo' : 'lineTo'](x(sample), cashY(sample));
+    });
+    context.stroke();
+    context.globalAlpha = 1;
+}
+
+function clearShopGraph() {
+    history = History.createHistory();
+    graphClock = 0;
+    const canvas = document.getElementById('shopGraph');
+    const context = canvas.getContext('2d');
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
 // Draws the building for `stage` into `container`. Uses img/building_N.png when it exists.
 function renderBuilding(container, stage) {
     container.innerHTML = '';
@@ -994,6 +1073,12 @@ function onTick() {
         crowdClock = 0;
         updateCrowd();
     }
+    graphClock += TICK_SECONDS;
+    if (graphClock >= GRAPH_SAMPLE_SECONDS - 1e-9) {
+        graphClock = 0;
+        history = History.recordSample(history, run.time, run.revenue, run.cash, GRAPH_WINDOW_SECONDS);
+        drawShopGraph();
+    }
     if (!isAnimating && Economy.isBankrupt(run)) {
         endRun();
     }
@@ -1276,6 +1361,7 @@ function actuallyStartGame(practiceMode = false) {
     crowd = Crowd.createCrowd();
     crowdClock = 0;
     clearCustomers();
+    clearShopGraph();
 
     newBoard(run.stage);
     updateStage();
@@ -1323,6 +1409,7 @@ function restartGame() {
     comboLevel = 0;
     setComboEffects(0);
     clearCustomers();
+    clearShopGraph();
 
     // Hide game over screen and show start screen
     document.getElementById('gameOver').style.display = 'none';

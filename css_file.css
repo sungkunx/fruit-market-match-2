@@ -964,6 +964,18 @@ body.combo-bg-3 {
     gap: 6px;
 }
 
+/* 가게 뒤에 흐르는 매출·수익 그래프 (건물과 손님보다 뒤) */
+.shop-graph {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 26px;
+    z-index: 1;
+    width: 100%;
+    pointer-events: none;
+}
+
 .building-slot {
     position: absolute;
     inset: 0;
