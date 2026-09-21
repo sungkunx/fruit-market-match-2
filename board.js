@@ -10,6 +10,31 @@
         return fruits[Math.floor(rng() * fruits.length)];
     }
 
+    // A cell is the fruit's name, and a special carries its kind after a '#'. The rainbow has no
+    // fruit at all ('#stock'), so it never joins a match and only a tap sets it off.
+    const SPECIAL_MARK = '#';
+
+    function fruitOf(cell) {
+        if (cell === null) return null;
+        const mark = cell.indexOf(SPECIAL_MARK);
+        return mark < 0 ? cell : cell.slice(0, mark);
+    }
+
+    function specialOf(cell) {
+        if (cell === null) return null;
+        const mark = cell.indexOf(SPECIAL_MARK);
+        return mark < 0 ? null : cell.slice(mark + 1);
+    }
+
+    function withSpecial(fruit, kind) {
+        return `${fruit}${SPECIAL_MARK}${kind}`;
+    }
+
+    function sameFruit(a, b) {
+        const fruit = fruitOf(a);
+        return fruit !== null && fruit !== '' && fruit === fruitOf(b);
+    }
+
     function inBounds(board, cell) {
         return cell.row >= 0 && cell.row < board.length && cell.col >= 0 && cell.col < board[0].length;
     }
@@ -34,11 +59,11 @@
         for (let row = 0; row < rows; row++) {
             let start = 0;
             for (let col = 1; col <= cols; col++) {
-                if (col < cols && board[row][col] !== null && board[row][col] === board[row][start]) continue;
-                if (col - start >= 3 && board[row][start] !== null) {
+                if (col < cols && sameFruit(board[row][col], board[row][start])) continue;
+                if (col - start >= 3 && fruitOf(board[row][start])) {
                     const cells = [];
                     for (let k = start; k < col; k++) cells.push({ row, col: k });
-                    runs.push({ fruit: board[row][start], cells });
+                    runs.push({ fruit: fruitOf(board[row][start]), cells });
                 }
                 start = col;
             }
@@ -47,11 +72,11 @@
         for (let col = 0; col < cols; col++) {
             let start = 0;
             for (let row = 1; row <= rows; row++) {
-                if (row < rows && board[row][col] !== null && board[row][col] === board[start][col]) continue;
-                if (row - start >= 3 && board[start][col] !== null) {
+                if (row < rows && sameFruit(board[row][col], board[start][col])) continue;
+                if (row - start >= 3 && fruitOf(board[start][col])) {
                     const cells = [];
                     for (let k = start; k < row; k++) cells.push({ row: k, col });
-                    runs.push({ fruit: board[start][col], cells });
+                    runs.push({ fruit: fruitOf(board[start][col]), cells });
                 }
                 start = row;
             }
@@ -134,26 +159,122 @@
         return { falls, spawns, board: next };
     }
 
-    function cascade(board, rng, fruits, startChain) {
+    function cellKey(cell) {
+        return `${cell.row},${cell.col}`;
+    }
+
+    // What a match of four or more leaves behind: a striped tile for a straight four, a crate for
+    // a bent match, a rainbow for a straight five.
+    function specialFor(group) {
+        const cells = group.cells;
+        if (cells.length < 4) return null;
+        const sameRow = cells.every(cell => cell.row === cells[0].row);
+        const sameCol = cells.every(cell => cell.col === cells[0].col);
+        if (!sameRow && !sameCol) return 'crate';
+        if (cells.length >= 5) return 'stock';
+        return sameRow ? 'line-h' : 'line-v';
+    }
+
+    // The special lands where the player's own fruit ended up, or in the middle of the match.
+    function bornCell(group, preferred) {
+        const hit = preferred.find(cell => cell && group.cells.some(other => other.row === cell.row && other.col === cell.col));
+        return hit || group.cells[Math.floor(group.cells.length / 2)];
+    }
+
+    function newSpecial(group, kind) {
+        return kind === 'stock' ? withSpecial('', 'stock') : withSpecial(group.fruit, kind);
+    }
+
+    // Cells sold in one step, gathered by fruit so the money and the floats line up.
+    function groupCells(board, cells) {
+        const groups = [];
+        cells.forEach(cell => {
+            const fruit = fruitOf(board[cell.row][cell.col]);
+            const group = groups.find(entry => entry.fruit === fruit);
+            if (group) group.cells.push(cell);
+            else groups.push({ fruit, cells: [cell] });
+        });
+        return groups;
+    }
+
+    function fullestFruit(board) {
+        const counts = new Map();
+        board.forEach(line => line.forEach(value => {
+            const fruit = fruitOf(value);
+            if (fruit) counts.set(fruit, (counts.get(fruit) || 0) + 1);
+        }));
+        const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+        return best ? best[0] : null;
+    }
+
+    // The cells a special sweeps when it goes off.
+    function activationCells(board, cell) {
+        const kind = specialOf(board[cell.row][cell.col]);
+        if (kind === 'line-h') return board[cell.row].map((value, col) => ({ row: cell.row, col }));
+        if (kind === 'line-v') return board.map((line, row) => ({ row, col: cell.col }));
+        if (kind === 'crate') return cellsAround(board, cell, 1);
+        if (kind === 'stock') {
+            const fruit = fullestFruit(board);
+            return [cell, ...(fruit ? cellsOfFruit(board, fruit) : [])];
+        }
+        return [cell];
+    }
+
+    // Any special caught in a clear goes off as well, and whatever that reaches can go off in turn.
+    function expandBlast(board, cells, spared = new Set()) {
+        const chosen = new Map();
+        const queue = [];
+        const add = cell => {
+            if (!inBounds(board, cell)) return;
+            const key = cellKey(cell);
+            if (chosen.has(key)) return;
+            chosen.set(key, cell);
+            if (!spared.has(key) && specialOf(board[cell.row][cell.col])) queue.push(cell);
+        };
+        cells.forEach(add);
+        while (queue.length > 0) {
+            activationCells(board, queue.shift()).forEach(add);
+        }
+        return [...chosen.values()];
+    }
+
+    function cascade(board, rng, fruits, startChain, preferred = [], specials = true) {
         const steps = [];
         let current = board;
         let chain = startChain;
         let groups = findMatches(current);
+        let wanted = preferred;
 
         while (groups.length > 0) {
-            const cleared = groups.flatMap(group => group.cells);
-            const result = clearAndCollapse(current, cleared, rng, fruits);
+            const born = [];
+            if (specials) {
+                groups.forEach(group => {
+                    const kind = specialFor(group);
+                    if (kind) born.push({ cell: bornCell(group, wanted), kind, value: newSpecial(group, kind) });
+                });
+            }
+
+            const seeded = cloneBoard(current);
+            born.forEach(item => { seeded[item.cell.row][item.cell.col] = item.value; });
+            const spared = new Set(born.map(item => cellKey(item.cell)));
+
+            const matched = groups.flatMap(group => group.cells).filter(cell => !spared.has(cellKey(cell)));
+            const cleared = expandBlast(seeded, matched, spared).filter(cell => !spared.has(cellKey(cell)));
+
+            const result = clearAndCollapse(seeded, cleared, rng, fruits);
             steps.push({
                 kind: 'match',
                 chain,
-                groups,
+                groups: groupCells(seeded, cleared),
                 cleared,
+                born,
                 falls: result.falls,
                 spawns: result.spawns,
                 board: result.board
             });
             current = result.board;
             chain++;
+            wanted = [];
             groups = findMatches(current);
         }
 
@@ -161,7 +282,7 @@
     }
 
     // a: the cell the player dragged, b: the neighbor it was pushed into.
-    function resolveMove(board, a, b, rng, fruits) {
+    function resolveMove(board, a, b, rng, fruits, specials = true) {
         if (!inBounds(board, a) || !inBounds(board, b) || !isAdjacent(a, b)) {
             return { valid: false };
         }
@@ -169,14 +290,14 @@
         if (findMatches(swappedBoard).length === 0) {
             return { valid: false };
         }
-        const { steps, finalBoard } = cascade(swappedBoard, rng, fruits, 1);
+        const { steps, finalBoard } = cascade(swappedBoard, rng, fruits, 1, [b, a], specials);
         return { valid: true, swappedBoard, steps, finalBoard };
     }
 
     function cellsOfFruit(board, fruit) {
         const cells = [];
         board.forEach((line, row) => line.forEach((value, col) => {
-            if (value === fruit) cells.push({ row, col });
+            if (fruitOf(value) === fruit) cells.push({ row, col });
         }));
         return cells;
     }
@@ -203,17 +324,12 @@
         });
         if (cleared.length === 0) return { valid: false };
 
-        const groups = [];
-        cleared.forEach(cell => {
-            const fruit = board[cell.row][cell.col];
-            const group = groups.find(entry => entry.fruit === fruit);
-            if (group) group.cells.push(cell);
-            else groups.push({ fruit, cells: [cell] });
-        });
+        const groups = groupCells(board, cleared);
 
         const collapsed = clearAndCollapse(board, cleared, rng, fruits);
         const first = {
             kind: 'item',
+            born: [],
             chain: 1,
             groups,
             cleared,
@@ -223,6 +339,12 @@
         };
         const after = cascade(collapsed.board, rng, fruits, 2);
         return { valid: true, steps: [first, ...after.steps], finalBoard: after.finalBoard };
+    }
+
+    // A tap sets a special off: everything it sweeps, plus whatever those specials sweep in turn.
+    function blast(board, cell, rng, fruits) {
+        if (!inBounds(board, cell) || !specialOf(board[cell.row][cell.col])) return { valid: false };
+        return resolveClear(board, expandBlast(board, activationCells(board, cell)), rng, fruits);
     }
 
     // The swap that pops the most cells right away. Ties keep the first one found
@@ -237,7 +359,7 @@
                 const a = { row, col };
                 const neighbors = [{ row, col: col + 1 }, { row: row + 1, col }];
                 neighbors.forEach(b => {
-                    if (!inBounds(board, b) || board[a.row][a.col] === board[b.row][b.col]) return;
+                    if (!inBounds(board, b) || fruitOf(board[a.row][a.col]) === fruitOf(board[b.row][b.col])) return;
                     const groups = findMatches(swapCells(board, a, b));
                     const size = groups.reduce((sum, group) => sum + group.cells.length, 0);
                     if (size > 0 && (best === null || size > best.size)) {
@@ -306,7 +428,7 @@
 
     // True if putting `fruit` at `cell` would complete a line of 3 with the fruits already there.
     function makesLine(board, cell, fruit) {
-        const same = (row, col) => row >= 0 && row < board.length && col >= 0 && col < board[0].length && board[row][col] === fruit;
+        const same = (row, col) => row >= 0 && row < board.length && col >= 0 && col < board[0].length && fruitOf(board[row][col]) === fruit;
         const count = (dRow, dCol) => {
             let length = 0;
             while (same(cell.row + dRow * (length + 1), cell.col + dCol * (length + 1))) length++;
@@ -361,6 +483,11 @@
         cellsOfFruit,
         cellsAround,
         resolveClear,
+        blast,
+        fruitOf,
+        specialOf,
+        withSpecial,
+        activationCells,
         findBestMove,
         hasPossibleMove,
         pickFruits,

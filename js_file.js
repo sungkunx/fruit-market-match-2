@@ -40,8 +40,6 @@ const PRACTICE_LINES = {
     2: '판 돈은 매출(점수)과 수익에 함께 쌓여요',
     3: '수익은 임대료로 계속 줄어요. 0이 되면 파산이에요!'
 };
-let itemSlots = [];
-let armedItem = null; // the slot index waiting for the player to pick a target
 let practiceStep = 0; // 0 = not a practice run
 let practiceStepAt = 0;
 let practiceDoneOpen = false;
@@ -175,14 +173,23 @@ function fruitImage(cell) {
     return fruitWrapper(cell).firstChild;
 }
 
-function setCellFruit(cell, fruit, frame = '001') {
+// A cell holds a fruit, and a special carries its kind with it. The rainbow has no fruit, so
+// there is no picture to show: CSS draws it.
+function setCellFruit(cell, value, frame = '001') {
+    const fruit = Board.fruitOf(value);
+    const special = Board.specialOf(value);
     const img = fruitImage(cell);
-    img.src = fruitSrc(fruit, frame);
-    img.dataset.fruit = fruit;
+    const wrapper = fruitWrapper(cell);
+    if (special) wrapper.dataset.special = special;
+    else delete wrapper.dataset.special;
+    img.dataset.fruit = fruit || '';
+    img.hidden = !fruit;
+    if (fruit) img.src = fruitSrc(fruit, frame);
 }
 
 function setCellFrame(cell, frame) {
     const img = fruitImage(cell);
+    if (!img.dataset.fruit) return;
     img.src = fruitSrc(img.dataset.fruit, frame);
 }
 
@@ -317,12 +324,6 @@ function onGridPointerDown(event) {
     const cell = cellFromEvent(event);
     if (!cell) return;
 
-    if (armedItem !== null) {
-        event.preventDefault();
-        useArmedItem(cell);
-        return;
-    }
-
     event.preventDefault();
     document.getElementById('grid').setPointerCapture(event.pointerId);
     pointerStart = { pointerId: event.pointerId, cell, x: event.clientX, y: event.clientY };
@@ -351,11 +352,45 @@ function onGridPointerMove(event) {
     handleSwap(from, to);
 }
 
+// A tap that never became a swipe sets off whatever special sits under the finger.
 function onGridPointerEnd(event) {
     if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
     const cell = pointerStart.cell;
     pointerStart = null;
     setCellFrame(cell, '001');
+    if (Board.specialOf(board[cell.row][cell.col])) {
+        blastSpecial(cell);
+    }
+}
+
+// Setting off a special is free: it was already paid for by the match that made it.
+async function blastSpecial(cell) {
+    if (!canAcceptInput()) return;
+    const result = Board.blast(board, cell, Math.random, activeFruits);
+    if (!result.valid) return;
+
+    const session = gameSession;
+    isAnimating = true;
+    GameAudio.playSuccess(2);
+
+    const fruit = mainFruitOf(result.steps[0]);
+    const scored = Economy.scoreMove(run, rules, result, fruit, fruit);
+    const completed = await playSteps(result.steps, scored, session);
+    if (!completed) return;
+
+    board = result.finalBoard;
+    run = Economy.finishMove(run, scored, result.steps.length);
+    pulseMultiplier();
+    updateDashboard();
+    updateComboDisplay();
+
+    await finishTurn(session);
+}
+
+// What a blast counts as for the same-fruit multiplier: the fruit it sold most of.
+function mainFruitOf(step) {
+    const biggest = step.groups.reduce((best, group) => (best === null || group.cells.length > best.cells.length ? group : best), null);
+    return biggest ? biggest.fruit : null;
 }
 
 function setupGridInput() {
@@ -377,7 +412,7 @@ async function handleSwap(a, b) {
     run = Economy.chargeSwap(run, rules);
     showCostFloat(rules.laborPerSwap * run.modifiers.labor);
     updateDashboard();
-    const result = Board.resolveMove(board, a, b, Math.random, activeFruits);
+    const result = Board.resolveMove(board, a, b, Math.random, activeFruits, !run.tutorial);
 
     await animateSwap(a, b);
     if (session !== gameSession) return;
@@ -410,116 +445,6 @@ async function handleSwap(a, b) {
     pulseMultiplier();
     updateDashboard();
     updateComboDisplay();
-    dropItemFor(result);
-
-    await finishTurn(session);
-}
-
-const ITEM_LOOKS = {
-    stock: { icon: '🧺', name: '재고 정리', hint: '팔아치울 과일을 고르세요' },
-    crate: { icon: '📦', name: '상자 굴리기', hint: '상자를 굴릴 자리를 고르세요' },
-    reshelf: { icon: '🔄', name: '진열 다시', hint: '' }
-};
-
-// Items come from the feats the game already asks for: long chains and big matches. A full
-// shelf pays out nothing, so holding on to them costs the next one.
-function dropItemFor(result) {
-    if (run.tutorial || !Items.hasRoom(itemSlots, rules.items.slots)) return;
-    const item = Items.dropFor(result, rules.items);
-    if (!item) return;
-    itemSlots = Items.addItem(itemSlots, item, rules.items.slots);
-    renderItemSlots(itemSlots.length - 1);
-    GameAudio.playPop();
-    showComboEffect(`${ITEM_LOOKS[item].name} 입고!`);
-}
-
-function renderItemSlots(gainedIndex = -1) {
-    // The practice shop never pays items, so it does not show the shelf either.
-    document.querySelector('.item-row').hidden = Boolean(run && run.tutorial);
-    const row = document.getElementById('itemSlots');
-    row.innerHTML = '';
-    for (let index = 0; index < rules.items.slots; index++) {
-        const item = itemSlots[index];
-        const slot = document.createElement('button');
-        slot.className = 'item-slot';
-        slot.type = 'button';
-        if (!item) {
-            slot.classList.add('empty');
-            slot.disabled = true;
-            slot.setAttribute('aria-label', '빈 자리');
-        } else {
-            const look = ITEM_LOOKS[item];
-            slot.innerHTML = `<span class="item-icon">${look.icon}</span><span class="item-name">${look.name}</span>`;
-            slot.onclick = () => onItemSlotClick(index);
-            if (armedItem === index) slot.classList.add('armed');
-            if (index === gainedIndex) slot.classList.add('gained');
-        }
-        row.appendChild(slot);
-    }
-    document.getElementById('itemHint').textContent = armedItem === null ? '' : ITEM_LOOKS[itemSlots[armedItem]].hint;
-    document.getElementById('grid').classList.toggle('picking', armedItem !== null);
-}
-
-function clearItems() {
-    itemSlots = [];
-    armedItem = null;
-    renderItemSlots();
-}
-
-// Reshuffling happens at once. The other two wait for the player to pick a target.
-async function onItemSlotClick(index) {
-    if (!canAcceptInput()) return;
-    const item = itemSlots[index];
-    if (armedItem === index) {
-        armedItem = null;
-        renderItemSlots();
-        return;
-    }
-    if (item !== 'reshelf') {
-        armedItem = index;
-        renderItemSlots();
-        return;
-    }
-
-    const session = gameSession;
-    itemSlots = Items.useItem(itemSlots, index);
-    armedItem = null;
-    renderItemSlots();
-    isAnimating = true;
-    GameAudio.playSuccess(2);
-    showComboEffect('진열 다시!');
-    await animateShuffle(Board.shuffle(board, Math.random), session);
-    if (session !== gameSession) return;
-    await finishTurn(session);
-}
-
-// The player picked the target for the armed item. No labour cost: the item is the move.
-async function useArmedItem(cell) {
-    const index = armedItem;
-    const item = itemSlots[index];
-    const cells = item === 'stock'
-        ? Board.cellsOfFruit(board, board[cell.row][cell.col])
-        : Board.cellsAround(board, cell, rules.items.crateRadius);
-    const result = Board.resolveClear(board, cells, Math.random, activeFruits);
-    if (!result.valid) return;
-
-    const session = gameSession;
-    itemSlots = Items.useItem(itemSlots, index);
-    armedItem = null;
-    renderItemSlots();
-    isAnimating = true;
-
-    const fruit = Items.mainFruit(result.steps[0]);
-    const scored = Economy.scoreMove(run, rules, result, fruit, fruit);
-    const completed = await playSteps(result.steps, scored, session);
-    if (!completed) return;
-
-    board = result.finalBoard;
-    run = Economy.finishMove(run, scored, result.steps.length);
-    pulseMultiplier();
-    updateDashboard();
-    updateComboDisplay();
-    dropItemFor(result);
 
     await finishTurn(session);
 }
@@ -530,6 +455,10 @@ async function playSteps(steps, scored, session) {
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         GameAudio.playSuccess(step.chain);
+        (step.born || []).forEach(item => {
+            setCellFruit(item.cell, item.value);
+            fruitWrapper(item.cell).classList.add('special-born');
+        });
         await animatePop(step.cleared);
         if (session !== gameSession) return false;
 
@@ -1542,7 +1471,6 @@ function actuallyStartGame(practiceMode = false) {
     dangerShown = false;
     crowd = Crowd.createCrowd();
     crowdClock = 0;
-    clearItems();
     clearCustomers();
     clearShopGraph();
 
@@ -1591,7 +1519,6 @@ function restartGame() {
 
     comboLevel = 0;
     setComboEffects(0);
-    clearItems();
     stopCelebrating();
     clearCustomers();
     clearShopGraph();
@@ -1997,5 +1924,4 @@ updateSoundButtons();
 setupGridInput();
 newBoard(1);
 renderBuilding(document.getElementById('buildingSlot'), 1);
-renderItemSlots();
 fillStartCrowd();

@@ -228,7 +228,13 @@ test('expandBoard never leaves a line and always leaves a move (property test)',
 // from the pre-step board, write them into a result grid) must reproduce `step.board`
 // exactly, with every other cell unchanged.
 function replayStep(preBoard, step) {
-    const result = preBoard.map(row => row.slice());
+    // A step first leaves its new specials on the board, then clears around them.
+    const seeded = preBoard.map(row => row.slice());
+    (step.born || []).forEach(item => {
+        seeded[item.cell.row][item.cell.col] = item.value;
+    });
+
+    const result = seeded.map(row => row.slice());
     const clearedKeys = new Set();
 
     step.cleared.forEach(cell => {
@@ -240,7 +246,7 @@ function replayStep(preBoard, step) {
 
     const filledKeys = new Set();
     step.falls.forEach(fall => {
-        result[fall.to.row][fall.to.col] = preBoard[fall.from.row][fall.from.col];
+        result[fall.to.row][fall.to.col] = seeded[fall.from.row][fall.from.col];
         filledKeys.add(`${fall.to.row},${fall.to.col}`);
     });
     step.spawns.forEach(spawn => {
@@ -330,4 +336,66 @@ test('resolveClear groups the cleared cells by fruit and ignores repeats and cel
 
 test('resolveClear refuses an empty clear', () => {
     assert.deepEqual(Board.resolveClear(parseBoard(['ab', 'ba']), [{ row: 5, col: 5 }], seededRng(1), ['a', 'b']), { valid: false });
+});
+
+test('a straight four leaves a striped tile where the player moved, pointing the way the four lay', () => {
+    // Pushing the a at (1,2) up completes four a's across row 0.
+    const board = parseBoard(['aaba', 'ccad', 'bdcb', 'cbad']);
+    const moved = { row: 0, col: 2 };
+    const result = Board.resolveMove(board, { row: 1, col: 2 }, moved, sequenceRng([0.1, 0.6, 0.35, 0.85]), ['b', 'c', 'd']);
+
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.steps[0].born.map(item => item.kind), ['line-h']);
+    assert.deepEqual(result.steps[0].born[0].cell, moved);
+    assert.equal(Board.specialOf(result.steps[0].board[moved.row][moved.col]), 'line-h');
+    assert.equal(Board.fruitOf(result.steps[0].board[moved.row][moved.col]), 'a');
+});
+
+test('a bent match leaves a crate and a straight five leaves the rainbow', () => {
+    assert.equal(Board.specialOf(Board.withSpecial('a', 'crate')), 'crate');
+    assert.equal(Board.fruitOf(Board.withSpecial('a', 'crate')), 'a');
+    assert.equal(Board.fruitOf(Board.withSpecial('', 'stock')), '');
+});
+
+test('the rainbow never joins a match, so two of them sitting together stay put', () => {
+    const rainbow = Board.withSpecial('', 'stock');
+    const board = [[rainbow, rainbow, rainbow], ['a', 'b', 'a'], ['b', 'a', 'b']];
+    assert.deepEqual(Board.findMatches(board), []);
+});
+
+test('a tap on a striped tile sells its whole row, and on a crate its 3x3', () => {
+    const board = parseBoard(['abcde', 'fabcd', 'efabc', 'defab', 'cdefa']);
+    board[2][2] = Board.withSpecial('a', 'line-h');
+    const row = Board.blast(board, { row: 2, col: 2 }, seededRng(3), ['x', 'y', 'z']);
+    assert.equal(row.valid, true);
+    assert.equal(row.steps[0].cleared.length, 5);
+    assert.ok(row.steps[0].cleared.every(cell => cell.row === 2));
+
+    const crated = parseBoard(['abcde', 'fabcd', 'efabc', 'defab', 'cdefa']);
+    crated[2][2] = Board.withSpecial('a', 'crate');
+    const blast = Board.blast(crated, { row: 2, col: 2 }, seededRng(3), ['x', 'y', 'z']);
+    assert.equal(blast.steps[0].cleared.length, 9);
+});
+
+test('the rainbow sells whichever fruit the board holds most of', () => {
+    const board = parseBoard(['aaab', 'aaab', 'aaab', 'bbbb']);
+    board[0][3] = Board.withSpecial('', 'stock');
+    const result = Board.blast(board, { row: 0, col: 3 }, seededRng(5), ['x', 'y']);
+    // Nine a's plus the rainbow itself.
+    assert.equal(result.steps[0].cleared.length, 10);
+});
+
+test('a special caught in a blast goes off too', () => {
+    const board = parseBoard(['abcde', 'fabcd', 'efabc', 'defab', 'cdefa']);
+    board[2][2] = Board.withSpecial('a', 'line-h');
+    board[2][4] = Board.withSpecial('c', 'line-v');
+    const result = Board.blast(board, { row: 2, col: 2 }, seededRng(7), ['x', 'y', 'z']);
+    // The row of five plus the column the second special sweeps, minus the cell they share.
+    assert.equal(result.steps[0].cleared.length, 9);
+});
+
+test('activationCells on a plain fruit is just that cell', () => {
+    const board = parseBoard(['ab', 'ba']);
+    assert.deepEqual(Board.activationCells(board, { row: 0, col: 0 }), [{ row: 0, col: 0 }]);
+    assert.deepEqual(Board.blast(board, { row: 0, col: 0 }, seededRng(1), ['a', 'b']), { valid: false });
 });

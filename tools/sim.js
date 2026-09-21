@@ -3,7 +3,6 @@
 //   node tools/sim.js [runsPerPlayer]
 const Board = require('../board.js');
 const Economy = require('../economy.js');
-const Items = require('../items.js');
 const Tuning = require('../tuning.js');
 
 const PLAYERS = [
@@ -49,20 +48,14 @@ function validMoves(board) {
     return moves;
 }
 
-// The most common fruit on the board: what a player would aim a stock clear at.
-function fullestFruit(board) {
-    const counts = new Map();
-    board.forEach(line => line.forEach(fruit => counts.set(fruit, (counts.get(fruit) || 0) + 1)));
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-}
-
-// Using an item takes about as long as a swap, so it costs the bot one turn.
-function playItem(item, board, rng, fruits) {
-    if (item === 'reshelf') return { valid: false, board: Board.shuffle(board, rng) };
-    const cells = item === 'stock'
-        ? Board.cellsOfFruit(board, fullestFruit(board))
-        : Board.cellsAround(board, { row: Math.floor(board.length / 2), col: Math.floor(board[0].length / 2) }, Tuning.items.crateRadius);
-    return Board.resolveClear(board, cells, rng, fruits);
+// The first special the bot can see. It taps whatever it finds before swapping again.
+function findSpecial(board) {
+    for (let row = 0; row < board.length; row++) {
+        for (let col = 0; col < board[0].length; col++) {
+            if (Board.specialOf(board[row][col])) return { row, col };
+        }
+    }
+    return null;
 }
 
 function playRun(interval, seed) {
@@ -71,7 +64,6 @@ function playRun(interval, seed) {
     let run = Economy.createRun(Tuning);
     let board = Board.createBoard(rng, fruitsFor(1), first.cols, first.rows);
     let nextSwapAt = interval;
-    let slots = [];
     const reachedAt = [];
 
     while (run.time < MAX_TIME && !run.ended) {
@@ -81,22 +73,15 @@ function playRun(interval, seed) {
             nextSwapAt += interval;
             if (!Board.hasPossibleMove(board)) board = Board.shuffle(board, rng);
 
-            // A full shelf pays out nothing, so the bot spends the turn using what it holds.
-            if (slots.length >= Tuning.items.slots) {
-                const item = slots[0];
-                slots = Items.useItem(slots, 0);
-                const played = playItem(item, board, rng, fruitsFor(run.stage));
-                if (!played.valid) {
-                    board = played.board;
-                } else {
-                    const fruit = Items.mainFruit(played.steps[0]);
-                    const scored = Economy.scoreMove(run, Tuning, played, fruit, fruit);
-                    scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
-                    run = Economy.finishMove(run, scored, played.steps.length);
-                    board = played.finalBoard;
-                    const extra = Items.dropFor(played, Tuning.items);
-                    if (extra) slots = Items.addItem(slots, extra, Tuning.items.slots);
-                }
+            // Setting a special off is a turn of its own, the same as it is for a player.
+            const special = findSpecial(board);
+            if (special) {
+                const played = Board.blast(board, special, rng, fruitsFor(run.stage));
+                const fruit = played.steps[0].groups[0].fruit;
+                const scored = Economy.scoreMove(run, Tuning, played, fruit, fruit);
+                scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
+                run = Economy.finishMove(run, scored, played.steps.length);
+                board = played.finalBoard;
             } else {
                 const moves = validMoves(board);
                 const [a, b] = moves[Math.floor(rng() * moves.length)];
@@ -108,8 +93,6 @@ function playRun(interval, seed) {
                 scored.stepScores.forEach(amount => { run = Economy.addEarnings(run, amount); });
                 run = Economy.finishMove(run, scored, result.steps.length);
                 board = result.finalBoard;
-                const item = Items.dropFor(result, Tuning.items);
-                if (item) slots = Items.addItem(slots, item, Tuning.items.slots);
             }
         }
 

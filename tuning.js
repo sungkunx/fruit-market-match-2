@@ -41,18 +41,7 @@
         crowdWindowSeconds: 8,
         crowdPerRentPace: 3,
         crowdMax: 14,
-        crowdUpdateSeconds: 0.5,
-        // Board-clearing items. A move pays the first condition it meets, so the strongest item
-        // hangs on the rarest feat.
-        items: {
-            slots: 2,
-            crateRadius: 1,
-            drops: [
-                { item: 'stock', minChain: 4, minGroup: 6 },
-                { item: 'crate', minChain: Infinity, minGroup: 5 },
-                { item: 'reshelf', minChain: 3, minGroup: Infinity }
-            ]
-        }
+        crowdUpdateSeconds: 0.5
     };
 
     if (typeof module !== 'undefined' && module.exports) {
