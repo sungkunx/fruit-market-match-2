@@ -21,7 +21,8 @@ const T = {
     inflationInterval: 30,
     surchargeStage: 6,
     surchargeRate: 2,
-    surchargeInterval: 20,
+    // Neutral relief: these tests pin the rent rules that do not depend on it.
+    openingRelief: { start: 1, seconds: 0, climbAfter: 0, climbRate: 1, climbInterval: 20, climbMax: 100 },
     laborPerSwap: 2,
     logisticsInterval: 5,
     sameFruitBonus: 0.3,
@@ -80,12 +81,35 @@ test('rent goes up by the inflation rate every 30 seconds of game time', () => {
     assert.equal(Economy.inflation(runAt({ time: 60 }), T), 2.25);
 });
 
+test('a new shop opens at a discount that eases away, then pays more the longer it stays', () => {
+    const eased = { ...T, openingRelief: { start: 0.5, seconds: 30, climbAfter: 40, climbRate: 1.1, climbInterval: 20, climbMax: 2.5 } };
+    const pace = stageTime => Economy.stagePace(runAt({ stage: 5, stageTime }), eased);
+
+    assert.equal(pace(0), 0.5);
+    assert.equal(pace(15), 0.75);
+    assert.equal(pace(30), 1);
+    assert.equal(pace(59), 1);
+    assertClose(pace(60), 1.1);
+    assertClose(pace(80), 1.21);
+    // An ordinary stage's climb has a ceiling, however long the shop sits still.
+    assertClose(pace(600), 2.5);
+    // The endless stage has none.
+    assert.ok(Economy.stagePace(runAt({ stage: 6, stageTime: 600 }), eased) > 100);
+    // The endless stage climbs at its own steeper rate.
+    assertClose(Economy.stagePace(runAt({ stage: 6, stageTime: 60 }), eased), 2);
+});
+
+test('the reserve for the next stage counts its opening discount, not its full rent', () => {
+    const eased = { ...T, openingRelief: { start: 0.5, seconds: 30, climbAfter: 40, climbRate: 1.1, climbInterval: 20, climbMax: 2.5 } };
+    assert.equal(Economy.projectedRent(runAt({ stage: 1 }), eased, 2), 10);
+});
+
 test('the surcharge only applies at the surcharge stage and grows every 20 seconds there', () => {
     assert.equal(Economy.currentRent(runAt({ stage: 5, stageTime: 40 }), T), 50);
     assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 19.9 }), T), 100);
     assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 20 }), T), 200);
     assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 40, time: 30 }), T), 600);
-    assert.equal(Economy.surcharge(runAt({ stage: 6, stageTime: 40 }), T), 4);
+    assert.equal(Economy.stagePace(runAt({ stage: 6, stageTime: 40 }), T), 4);
 });
 
 test('logistics is charged once every 5 seconds', () => {

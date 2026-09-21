@@ -11,9 +11,9 @@
             { name: '천막', cols: 5, rows: 5, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 1680 },
             { name: '좌판', cols: 6, rows: 5, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 9480 },
             { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 40000 },
-            { name: '편의점', cols: 6, rows: 6, fruits: 5, price: 248, rent: 450, logistics: 21, expandCost: 85000 },
-            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 140000 },
-            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 1200000 },
+            { name: '편의점', cols: 6, rows: 6, fruits: 5, price: 248, rent: 450, logistics: 21, expandCost: 95000 },
+            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 165000 },
+            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 1400000 },
             { name: '우주 최강 건물', cols: 7, rows: 7, fruits: 7, price: 8100, rent: 9000, logistics: 540, expandCost: null }
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
@@ -25,7 +25,17 @@
         inflationInterval: 30,
         surchargeStage: 7,
         surchargeRate: 1.2,
-        surchargeInterval: 20,
+        // A new shop opens at half rent, pays full rent 30 seconds later, and from then on pays
+        // more the longer it stays put.
+        openingRelief: {
+            start: 0.5,
+            seconds: 30,
+            // Nothing extra for the first minute; after that, sitting still costs more and more.
+            climbAfter: 60,
+            climbRate: 1.1,
+            climbInterval: 20,
+            climbMax: 2.5
+        },
         laborPerSwap: 2,
         logisticsInterval: 5,
         sameFruitBonus: 0.3,

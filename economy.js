@@ -41,20 +41,30 @@
         return Math.pow(tuning.inflationRate, Math.floor(state.time / tuning.inflationInterval));
     }
 
-    // Extra rent that keeps climbing the longer the shop stays at the endless last stage.
-    function surcharge(state, tuning) {
-        if (state.stage !== tuning.surchargeStage) return 1;
-        return Math.pow(tuning.surchargeRate, Math.floor(state.stageTime / tuning.surchargeInterval));
+    // What a shop pays on top of its stage rent, as the stage wears on. A new shop opens at a
+    // discount that eases away, and once it is gone the rent keeps climbing: cheap to arrive,
+    // expensive to sit still.
+    function stagePace(state, tuning) {
+        const relief = tuning.openingRelief;
+        const eased = relief.seconds > 0
+            ? Math.min(1, relief.start + (1 - relief.start) * (state.stageTime / relief.seconds))
+            : 1;
+        const camped = Math.max(0, state.stageTime - relief.climbAfter);
+        const endless = state.stage === tuning.surchargeStage;
+        const rate = endless ? tuning.surchargeRate : relief.climbRate;
+        const climb = Math.pow(rate, Math.floor(camped / relief.climbInterval));
+        // The endless stage has no ceiling: that climb is what finally ends a good run.
+        return eased * (endless ? climb : Math.min(climb, relief.climbMax));
     }
 
     // Rent per second right now.
     function currentRent(state, tuning) {
-        return stageInfo(state, tuning).rent * inflation(state, tuning) * surcharge(state, tuning) * state.modifiers.rent;
+        return stageInfo(state, tuning).rent * inflation(state, tuning) * stagePace(state, tuning) * state.modifiers.rent;
     }
 
-    // Rent per second the shop would pay at `stage` with today's prices (no surcharge yet).
+    // Rent per second the shop would pay the moment it moved to `stage`, opening discount and all.
     function projectedRent(state, tuning, stage) {
-        return tuning.stages[stage - 1].rent * inflation(state, tuning) * state.modifiers.rent;
+        return tuning.stages[stage - 1].rent * inflation(state, tuning) * tuning.openingRelief.start * state.modifiers.rent;
     }
 
     function currentLogistics(state, tuning) {
@@ -162,7 +172,7 @@
     const Economy = {
         createRun,
         inflation,
-        surcharge,
+        stagePace,
         currentRent,
         projectedRent,
         currentLogistics,

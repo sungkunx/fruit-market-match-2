@@ -1403,6 +1403,17 @@ body.combo-bg-3 {
     100% { opacity: 0; transform: translate(-50%, -22px); }
 }
 
+/* 입점 할인 중에는 초록, 인상 뒤에는 빨강 */
+.cost-chip.cheap {
+    color: var(--grass-dark);
+    border-color: var(--grass-dark);
+}
+
+.cost-chip.dear {
+    color: var(--awning-red);
+    border-color: var(--awning-red);
+}
+
 .cost-line {
     margin-top: 6px;
     display: flex;

@@ -836,6 +836,7 @@ function openStageCard() {
         ['과일', `${info.fruits}종`, previous ? `${previous.fruits}종` : null],
         ['과일 1개 값', formatMoney(Economy.currentPrice(run, rules)), before ? formatMoney(Economy.currentPrice(before, rules)) : null],
         ['유지비', upkeepText(run), before ? upkeepText(before) : null],
+        ['입점 할인', `${rules.openingRelief.seconds}초간 절반`, null],
         ['물가', `+${inflationPercent}%`, null]
     ];
     const list = document.getElementById('stageCardFacts');
@@ -1037,10 +1038,15 @@ function updateCostLine() {
     const labor = rules.laborPerSwap * run.modifiers.labor;
     const line = document.getElementById('costLine');
     line.innerHTML = '';
-    [`유지비 −${formatMoney(upkeep)}/초`, `한 수 −${formatMoney(labor)}`].forEach(text => {
+    const pace = Economy.stagePace(run, rules);
+    const chips = [
+        { text: `유지비 −${formatMoney(upkeep)}/초`, mood: pace < 1 ? 'cheap' : pace > 1 ? 'dear' : '' },
+        { text: `한 수 −${formatMoney(labor)}`, mood: '' }
+    ];
+    chips.forEach(({ text, mood }) => {
         const chip = document.createElement('span');
-        chip.className = 'cost-chip';
-        chip.textContent = text;
+        chip.className = mood ? `cost-chip ${mood}` : 'cost-chip';
+        chip.textContent = mood === 'cheap' ? `${text} 입점 할인` : mood === 'dear' ? `${text} 임대료 인상` : text;
         line.appendChild(chip);
     });
 
@@ -1124,9 +1130,11 @@ function updateBoardInfo() {
     const info = stageInfo(run.stage);
     const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
     let text = `진열대 ${info.cols}×${info.rows} · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
-    const surchargePercent = Math.round((Economy.surcharge(run, rules) - 1) * 100);
-    if (surchargePercent > 0) {
-        text += ` · 할증 +${surchargePercent}%`;
+    const pacePercent = Math.round((Economy.stagePace(run, rules) - 1) * 100);
+    if (pacePercent < 0) {
+        text += ` · 입점 할인 ${pacePercent}%`;
+    } else if (pacePercent > 0) {
+        text += ` · 임대료 +${pacePercent}%`;
     }
     document.getElementById('boardInfo').textContent = text;
 }
