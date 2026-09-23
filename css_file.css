@@ -1443,53 +1443,192 @@ body.combo-bg-3 {
 /* ---------- 보드 프레임 ---------- */
 
 /* 판 위에서 태어나는 특수 과일 */
+.fruit[data-special] {
+    filter: drop-shadow(0 0 6px rgba(255, 244, 220, 0.9));
+}
+
 .fruit[data-special]::after {
     content: '';
     position: absolute;
-    inset: 6%;
+    inset: 4%;
     border-radius: 10px;
     pointer-events: none;
 }
 
+/* 줄 정리: 과일을 가로지르는 빛나는 띠가 흐른다 */
+.fruit[data-special="line-h"]::after,
+.fruit[data-special="line-v"]::after {
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), inset 0 0 10px rgba(255, 255, 255, 0.7);
+    background-size: 200% 200%;
+    animation: stripeFlow 1.1s linear infinite;
+}
+
 .fruit[data-special="line-h"]::after {
-    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.85) 0 3px, rgba(255, 255, 255, 0) 3px 8px);
-    border: 2px solid var(--cream);
-    box-shadow: 0 0 10px var(--cream);
+    background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.9) 0 3px, rgba(255, 255, 255, 0) 3px 9px);
 }
 
 .fruit[data-special="line-v"]::after {
-    background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.85) 0 3px, rgba(255, 255, 255, 0) 3px 8px);
-    border: 2px solid var(--cream);
-    box-shadow: 0 0 10px var(--cream);
+    background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0 3px, rgba(255, 255, 255, 0) 3px 9px);
 }
 
+@keyframes stripeFlow {
+    from { background-position: 0 0; }
+    to { background-position: 0 18px; }
+}
+
+.fruit[data-special="line-v"]::after {
+    animation-name: stripeFlowSide;
+}
+
+@keyframes stripeFlowSide {
+    from { background-position: 0 0; }
+    to { background-position: 18px 0; }
+}
+
+/* 상자: 과일을 나무 궤짝이 감싸고 살짝 들썩인다 */
 .fruit[data-special="crate"]::after {
-    background: repeating-linear-gradient(45deg, rgba(185, 119, 47, 0.55) 0 6px, rgba(227, 168, 87, 0.55) 6px 12px);
+    inset: 0;
+    border-radius: 7px;
     border: 3px solid var(--wood-dark);
-    border-radius: 6px;
+    background:
+        linear-gradient(0deg, transparent 0 22%, var(--wood) 22% 34%, transparent 34%),
+        linear-gradient(0deg, transparent 0 66%, var(--wood) 66% 78%, transparent 78%),
+        repeating-linear-gradient(90deg, rgba(227, 168, 87, 0.35) 0 7px, rgba(185, 119, 47, 0.35) 7px 14px);
+    box-shadow: inset 0 0 8px rgba(90, 51, 16, 0.6);
+    animation: crateNudge 1.6s ease-in-out infinite;
 }
 
-/* 무지개는 과일 그림이 없다. 판 위에서 혼자 빛난다 */
+@keyframes crateNudge {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg) scale(1.04); }
+}
+
+/* 무지개: 과일 그림이 없다. 판 위에서 혼자 돌며 빛난다 */
 .fruit[data-special="stock"]::after {
-    inset: 8%;
+    inset: 6%;
     border-radius: 50%;
     border: 3px solid var(--wood-dark);
-    background: conic-gradient(var(--awning-red), var(--sun), var(--leaf), var(--store-blue), var(--violet), var(--awning-red));
-    animation: stockSpin 3s linear infinite;
+    background: conic-gradient(var(--awning-red), var(--sun), var(--leaf), var(--neon), var(--store-blue), var(--violet), var(--awning-red));
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.85);
+    animation: stockSpin 2.4s linear infinite;
+}
+
+/* 구슬 위의 반짝임 */
+.fruit[data-special="stock"]::before {
+    content: '';
+    position: absolute;
+    left: 20%;
+    top: 16%;
+    z-index: 2;
+    width: 26%;
+    height: 20%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    filter: blur(1px);
+    pointer-events: none;
+    animation: stockShine 2.4s ease-in-out infinite;
 }
 
 @keyframes stockSpin {
     to { transform: rotate(360deg); }
 }
 
+@keyframes stockShine {
+    0%, 100% { opacity: 0.35; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.15); }
+}
+
 .fruit.special-born {
-    animation: specialBorn 0.45s ease-out;
+    animation: specialBorn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes specialBorn {
-    0% { transform: scale(0.6) rotate(-15deg); }
-    55% { transform: scale(1.3) rotate(8deg); }
+    0% { transform: scale(0.4) rotate(-25deg); }
+    55% { transform: scale(1.35) rotate(10deg); }
     100% { transform: scale(1); }
+}
+
+/* 발동 연출이 그려지는 판 위 레이어 */
+.grid {
+    position: relative;
+}
+
+.blast-fx {
+    position: absolute;
+    pointer-events: none;
+    z-index: 30;
+}
+
+/* 줄 정리: 판을 가로지르는 빛줄기 */
+.blast-beam {
+    background:
+        linear-gradient(0deg, rgba(232, 65, 59, 0) 0%, var(--awning-red) 18%, #fff 50%, var(--awning-red) 82%, rgba(232, 65, 59, 0) 100%),
+        linear-gradient(90deg, rgba(255, 197, 61, 0) 0%, var(--gold) 12%, var(--gold) 88%, rgba(255, 197, 61, 0) 100%);
+    box-shadow: 0 0 26px var(--gold), 0 0 10px #fff;
+    border-radius: 999px;
+    animation: beamSweep 0.45s ease-out forwards;
+}
+
+.blast-beam.vertical {
+    background:
+        linear-gradient(90deg, rgba(232, 65, 59, 0) 0%, var(--awning-red) 18%, #fff 50%, var(--awning-red) 82%, rgba(232, 65, 59, 0) 100%),
+        linear-gradient(180deg, rgba(255, 197, 61, 0) 0%, var(--gold) 12%, var(--gold) 88%, rgba(255, 197, 61, 0) 100%);
+    animation-name: beamSweepDown;
+}
+
+@keyframes beamSweep {
+    0% { transform: scaleX(0.05) scaleY(0.4); opacity: 0.2; }
+    35% { transform: scaleX(1) scaleY(1); opacity: 1; }
+    100% { transform: scaleX(1) scaleY(0.5); opacity: 0; }
+}
+
+@keyframes beamSweepDown {
+    0% { transform: scaleY(0.05) scaleX(0.4); opacity: 0.2; }
+    35% { transform: scaleY(1) scaleX(1); opacity: 1; }
+    100% { transform: scaleY(1) scaleX(0.5); opacity: 0; }
+}
+
+/* 상자: 퍼져 나가는 충격파 */
+.blast-ring {
+    border-radius: 50%;
+    border: 5px solid var(--gold);
+    box-shadow: 0 0 22px var(--gold), inset 0 0 18px rgba(255, 197, 61, 0.7);
+    animation: ringBurst 0.5s ease-out forwards;
+}
+
+@keyframes ringBurst {
+    0% { transform: scale(0.2); opacity: 0.2; }
+    30% { opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* 무지개: 판 전체가 한 번 무지개빛으로 번쩍 */
+.blast-rainbow {
+    inset: 0;
+    border-radius: 10px;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 45%),
+        conic-gradient(rgba(232, 65, 59, 0.85), rgba(255, 211, 110, 0.85), rgba(109, 179, 63, 0.85), rgba(127, 227, 245, 0.85), rgba(155, 89, 182, 0.85), rgba(232, 65, 59, 0.85));
+    animation: rainbowFlash 0.6s ease-out forwards;
+}
+
+@keyframes rainbowFlash {
+    0% { opacity: 0; transform: scale(0.75) rotate(0deg); }
+    30% { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.1) rotate(60deg); }
+}
+
+.board-frame.shaking {
+    animation: boardShake 0.35s ease-in-out;
+}
+
+@keyframes boardShake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-6px, 3px); }
+    40% { transform: translate(5px, -4px); }
+    60% { transform: translate(-4px, -2px); }
+    80% { transform: translate(3px, 3px); }
 }
 
 .board-frame {
@@ -2131,7 +2270,10 @@ body.combo-bg-3 {
     .cost-line.cost-bump,
     .celebrate-flash,
     .fruit.special-born,
-    .fruit[data-special="stock"]::after,
+    .fruit[data-special]::after,
+    .fruit[data-special]::before,
+    .blast-fx,
+    .board-frame.shaking,
     .customer.cheering .customer-body,
     .earning-float {
         animation: none !important;

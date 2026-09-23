@@ -399,3 +399,26 @@ test('activationCells on a plain fruit is just that cell', () => {
     assert.deepEqual(Board.activationCells(board, { row: 0, col: 0 }), [{ row: 0, col: 0 }]);
     assert.deepEqual(Board.blast(board, { row: 0, col: 0 }, seededRng(1), ['a', 'b']), { valid: false });
 });
+
+test('a blast reports every special it set off, the tapped one first', () => {
+    const board = parseBoard(['abcde', 'fabcd', 'efabc', 'defab', 'cdefa']);
+    board[2][2] = Board.withSpecial('a', 'line-h');
+    board[2][4] = Board.withSpecial('c', 'line-v');
+    const result = Board.blast(board, { row: 2, col: 2 }, seededRng(7), ['x', 'y', 'z']);
+
+    assert.deepEqual(result.steps[0].fired.map(item => item.kind), ['line-h', 'line-v']);
+    assert.deepEqual(result.steps[0].fired[0].cell, { row: 2, col: 2 });
+    assert.deepEqual(result.steps[0].fired[1].cell, { row: 2, col: 4 });
+});
+
+test('a match that sweeps up a special sets it off and says so', () => {
+    // Pushing the striped tile into the pair of a's makes a three, and the stripe goes off with it.
+    const board = parseBoard(['aab', 'ccd', 'def', 'fed']);
+    board[1][2] = Board.withSpecial('a', 'line-v');
+    const result = Board.resolveMove(board, { row: 1, col: 2 }, { row: 0, col: 2 }, seededRng(11), ['b', 'c', 'd'], false);
+
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.steps[0].fired.map(item => item.kind), ['line-v']);
+    // The whole column went with it, not just the three in the row.
+    assert.ok(result.steps[0].cleared.length >= 3 + board.length - 1);
+});

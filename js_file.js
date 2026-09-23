@@ -54,6 +54,8 @@ let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
+const BLAST_FX_MS = 700; // how long a blast drawing stays on the board
+const BLAST_LEAD_MS = 130; // the beam reaches the fruits a moment before they pop
 const CELEBRATE_MS = 2600; // how long the confetti keeps falling after a new shop opens
 const CELEBRATE_FLASH_MS = 900;
 let celebrateTimer = null;
@@ -247,13 +249,71 @@ function animateSwap(a, b, reverse = false) {
     ]);
 }
 
-function animatePop(cells) {
+// Pops the cells. With an origin, the pop travels outward from it like a wave.
+function animatePop(cells, origin = null) {
     cells.forEach(cell => setCellFrame(cell, '003'));
-    return Promise.all(cells.map(cell => animate(fruitWrapper(cell), [
-        { transform: 'scale(1)', opacity: 1 },
-        { transform: 'scale(1.25)', opacity: 1, offset: 0.4 },
-        { transform: 'scale(0.2)', opacity: 0 }
-    ], { duration: 250, easing: 'ease-in' })));
+    return Promise.all(cells.map(cell => {
+        const distance = origin ? Math.max(Math.abs(cell.row - origin.row), Math.abs(cell.col - origin.col)) : 0;
+        return animate(fruitWrapper(cell), [
+            { transform: 'scale(1)', opacity: 1 },
+            { transform: 'scale(1.25)', opacity: 1, offset: 0.4 },
+            { transform: 'scale(0.2)', opacity: 0 }
+        ], { duration: 250, delay: Math.min(220, distance * 32), easing: 'ease-in', fill: 'backwards' });
+    }));
+}
+
+// Where a cell sits inside the grid, in the grid's own pixels.
+function cellBox(cell) {
+    const element = cellElements[cell.row][cell.col];
+    return { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight };
+}
+
+function addBlastLayer(className, style) {
+    const layer = document.createElement('div');
+    layer.className = `blast-fx ${className}`;
+    Object.assign(layer.style, style);
+    document.getElementById('grid').appendChild(layer);
+    setTimeout(() => layer.remove(), BLAST_FX_MS);
+    return layer;
+}
+
+function shakeBoard() {
+    const frame = document.getElementById('boardFrame');
+    frame.classList.remove('shaking');
+    void frame.offsetWidth; // restart the CSS animation
+    frame.classList.add('shaking');
+    setTimeout(() => frame.classList.remove('shaking'), 400);
+}
+
+// The picture of a special going off: a beam down its line, a shockwave around a crate, or a
+// rainbow wash over the whole board.
+function playBlastEffects(fired) {
+    if (!fired || fired.length === 0) return;
+    const grid = document.getElementById('grid');
+
+    fired.forEach((item, index) => {
+        setTimeout(() => {
+            const box = cellBox(item.cell);
+            const thickness = Math.round(box.height * 0.55);
+            if (item.kind === 'line-h') {
+                addBlastLayer('blast-beam', { left: '0px', top: `${box.top + box.height / 2 - thickness / 2}px`, width: `${grid.clientWidth}px`, height: `${thickness}px` });
+            } else if (item.kind === 'line-v') {
+                addBlastLayer('blast-beam vertical', { left: `${box.left + box.width / 2 - thickness / 2}px`, top: '0px', width: `${thickness}px`, height: `${grid.clientHeight}px` });
+            } else if (item.kind === 'crate') {
+                const size = box.width * 3.4;
+                addBlastLayer('blast-ring', {
+                    left: `${box.left + box.width / 2 - size / 2}px`,
+                    top: `${box.top + box.height / 2 - size / 2}px`,
+                    width: `${size}px`,
+                    height: `${size}px`
+                });
+            } else if (item.kind === 'stock') {
+                addBlastLayer('blast-rainbow', { left: '0px', top: '0px', width: `${grid.clientWidth}px`, height: `${grid.clientHeight}px` });
+            }
+            if (item.kind !== 'line-h' && item.kind !== 'line-v') shakeBoard();
+            GameAudio.playBlast(item.kind);
+        }, index * 90);
+    });
 }
 
 // Every cell that changed receives its new fruit, starting from where it falls from.
@@ -454,12 +514,18 @@ async function handleSwap(a, b) {
 async function playSteps(steps, scored, session) {
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
+        const fired = step.fired || [];
+        if (fired.length > 0) {
+            playBlastEffects(fired);
+            await wait(BLAST_LEAD_MS);
+            if (session !== gameSession) return false;
+        }
         GameAudio.playSuccess(step.chain);
         (step.born || []).forEach(item => {
             setCellFruit(item.cell, item.value);
             fruitWrapper(item.cell).classList.add('special-born');
         });
-        await animatePop(step.cleared);
+        await animatePop(step.cleared, fired.length > 0 ? fired[0].cell : null);
         if (session !== gameSession) return false;
 
         run = Economy.addEarnings(run, scored.stepScores[i]);

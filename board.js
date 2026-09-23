@@ -221,21 +221,27 @@
     }
 
     // Any special caught in a clear goes off as well, and whatever that reaches can go off in turn.
+    // `fired` comes back in the order they went off, so the screen can play them that way.
     function expandBlast(board, cells, spared = new Set()) {
         const chosen = new Map();
         const queue = [];
+        const fired = [];
         const add = cell => {
             if (!inBounds(board, cell)) return;
             const key = cellKey(cell);
             if (chosen.has(key)) return;
             chosen.set(key, cell);
-            if (!spared.has(key) && specialOf(board[cell.row][cell.col])) queue.push(cell);
+            const kind = specialOf(board[cell.row][cell.col]);
+            if (!spared.has(key) && kind) {
+                queue.push(cell);
+                fired.push({ cell, kind });
+            }
         };
         cells.forEach(add);
         while (queue.length > 0) {
             activationCells(board, queue.shift()).forEach(add);
         }
-        return [...chosen.values()];
+        return { cells: [...chosen.values()], fired };
     }
 
     function cascade(board, rng, fruits, startChain, preferred = [], specials = true) {
@@ -259,7 +265,8 @@
             const spared = new Set(born.map(item => cellKey(item.cell)));
 
             const matched = groups.flatMap(group => group.cells).filter(cell => !spared.has(cellKey(cell)));
-            const cleared = expandBlast(seeded, matched, spared).filter(cell => !spared.has(cellKey(cell)));
+            const blasted = expandBlast(seeded, matched, spared);
+            const cleared = blasted.cells.filter(cell => !spared.has(cellKey(cell)));
 
             const result = clearAndCollapse(seeded, cleared, rng, fruits);
             steps.push({
@@ -268,6 +275,7 @@
                 groups: groupCells(seeded, cleared),
                 cleared,
                 born,
+                fired: blasted.fired,
                 falls: result.falls,
                 spawns: result.spawns,
                 board: result.board
@@ -330,6 +338,7 @@
         const first = {
             kind: 'item',
             born: [],
+            fired: [],
             chain: 1,
             groups,
             cleared,
@@ -343,8 +352,14 @@
 
     // A tap sets a special off: everything it sweeps, plus whatever those specials sweep in turn.
     function blast(board, cell, rng, fruits) {
-        if (!inBounds(board, cell) || !specialOf(board[cell.row][cell.col])) return { valid: false };
-        return resolveClear(board, expandBlast(board, activationCells(board, cell)), rng, fruits);
+        const kind = inBounds(board, cell) ? specialOf(board[cell.row][cell.col]) : null;
+        if (!kind) return { valid: false };
+        const blasted = expandBlast(board, activationCells(board, cell));
+        const result = resolveClear(board, blasted.cells, rng, fruits);
+        if (!result.valid) return result;
+        const tapped = item => item.cell.row === cell.row && item.cell.col === cell.col;
+        result.steps[0].fired = [...blasted.fired.filter(tapped), ...blasted.fired.filter(item => !tapped(item))];
+        return result;
     }
 
     // The swap that pops the most cells right away. Ties keep the first one found

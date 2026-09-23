@@ -309,6 +309,36 @@
         return FANFARE_SECONDS;
     }
 
+    // Each special sounds like what it does: a sweep along the line, a thud for the crate, a
+    // sparkle run for the rainbow.
+    function playBlast(kind) {
+        init();
+        if (!context) return;
+        const now = context.currentTime;
+
+        if (kind === 'line-h' || kind === 'line-v') {
+            playNoise(sfxGain, now, { filterType: 'bandpass', frequency: 900, peak: 0.5, duration: 0.3 });
+            playTone(sfxGain, now, { type: 'sawtooth', freq: 320, endFreq: 1800, peak: 0.28, duration: 0.3 });
+            return;
+        }
+
+        if (kind === 'crate') {
+            playTone(sfxGain, now, { type: 'sine', freq: 180, endFreq: 40, peak: 0.8, duration: 0.4 });
+            playNoise(sfxGain, now, { filterType: 'lowpass', frequency: 1200, peak: 0.5, duration: 0.25 });
+            return;
+        }
+
+        [0, 4, 7, 12, 16, 19].forEach((step, index) => {
+            playTone(sfxGain, now + index * 0.05, {
+                type: 'triangle',
+                freq: midiToFreq(72 + step),
+                peak: 0.3,
+                duration: 0.25
+            });
+        });
+        playNoise(sfxGain, now, { filterType: 'highpass', frequency: 5000, peak: 0.35, duration: 0.5 });
+    }
+
     function playFail() {
         if (!context) return;
         playTone(sfxGain, context.currentTime, { type: 'sawtooth', freq: 200, endFreq: 100, peak: 0.2, duration: 0.5 });
@@ -326,6 +356,7 @@
         playPop,
         playSuccess,
         playFail,
+        playBlast,
         playFanfare,
         fanfareNotes,
         fanfareSeconds: FANFARE_SECONDS,
