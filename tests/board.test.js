@@ -422,3 +422,63 @@ test('a match that sweeps up a special sets it off and says so', () => {
     // The whole column went with it, not just the three in the row.
     assert.ok(result.steps[0].cleared.length >= 3 + board.length - 1);
 });
+
+// Closed cells of the 7x7 frame are written '#' in these boards.
+test('frameBoard sets the starting board in the middle of a frame of closed cells', () => {
+    const framed = Board.frameBoard(parseBoard(['abc', 'bca', 'cab']), 5);
+    assert.deepEqual(boardToLines(framed), ['#####', '#abc#', '#bca#', '#cab#', '#####']);
+    assert.equal(Board.openCount(framed), 9);
+});
+
+test('a closed cell breaks a line, so fruit on both sides of it never match', () => {
+    assert.deepEqual(Board.findMatches(parseBoard(['aa#a', 'bcbc'])), []);
+});
+
+test('fruit falls past a closed cell into the open cell below it', () => {
+    // Column 0 from the top: x, closed, y, z. Selling z drops y one row and x past the hole.
+    const board = parseBoard(['xb', '#c', 'yb', 'zc']);
+    const result = Board.clearAndCollapse(board, [{ row: 3, col: 0 }], sequenceRng([0]), ['q']);
+    assert.deepEqual(result.board.map(line => line[0]), ['q', '#', 'x', 'y']);
+    assert.deepEqual(result.falls.map(fall => [fall.from.row, fall.to.row]), [[2, 3], [0, 2]]);
+});
+
+test('a swap into a closed cell is refused', () => {
+    const board = parseBoard(['aab', '#ca', 'bcb']);
+    assert.deepEqual(Board.resolveMove(board, { row: 0, col: 0 }, { row: 1, col: 0 }, seededRng(1), ['a', 'b', 'c']), { valid: false });
+});
+
+test('shuffling moves the fruit around but leaves every closed cell where it was', () => {
+    const board = Board.frameBoard(Board.createBoard(seededRng(4), ['a', 'b', 'c', 'd'], 5, 5), 7);
+    const shuffled = Board.shuffle(board, seededRng(9));
+    board.forEach((line, row) => line.forEach((value, col) => {
+        assert.equal(Board.isHole(shuffled[row][col]), Board.isHole(value), `cell ${row},${col}`);
+    }));
+    assert.deepEqual(Board.findMatches(shuffled), []);
+});
+
+test('openCell opens one closed cell touching the board, without making a line', () => {
+    let board = Board.frameBoard(Board.createBoard(seededRng(6), ['a', 'b', 'c', 'd'], 5, 5), 7);
+    for (let step = 0; step < 24; step++) {
+        const before = Board.openCount(board);
+        const opened = Board.openCell(board, ['a', 'b', 'c', 'd'], seededRng(100 + step));
+        assert.ok(opened, `step ${step}: a cell should open`);
+        const { row, col } = opened.cell;
+        assert.equal(Board.isHole(board[row][col]), true, 'it was closed before');
+        const touching = [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dr, dc]) => board[row + dr] && board[row + dr][col + dc] !== undefined && !Board.isHole(board[row + dr][col + dc]));
+        assert.ok(touching, 'it touches the open board');
+        board = opened.board;
+        assert.equal(Board.openCount(board), before + 1);
+        assert.deepEqual(Board.findMatches(board), []);
+    }
+    assert.equal(Board.openCount(board), 49);
+    assert.equal(Board.openCell(board, ['a', 'b'], seededRng(1)), null, 'a full board has nothing left to open');
+});
+
+test('a striped tile sweeps only the open cells of its row', () => {
+    const board = parseBoard(['#abc#', 'bcabc', 'cabca']);
+    board[0][2] = Board.withSpecial('b', 'line-h');
+    const result = Board.blast(board, { row: 0, col: 2 }, seededRng(3), ['x', 'y', 'z']);
+    assert.equal(result.steps[0].cleared.length, 3);
+    assert.equal(Board.isHole(result.finalBoard[0][0]), true);
+    assert.equal(Board.isHole(result.finalBoard[0][4]), true);
+});

@@ -30,6 +30,17 @@
         return `${fruit}${SPECIAL_MARK}${kind}`;
     }
 
+    // A closed cell of the 7x7 frame: no fruit, breaks every line, never moves and never clears.
+    const HOLE = SPECIAL_MARK;
+
+    function isHole(cell) {
+        return cell === HOLE;
+    }
+
+    function isOpen(board, cell) {
+        return inBounds(board, cell) && !isHole(board[cell.row][cell.col]);
+    }
+
     function sameFruit(a, b) {
         const fruit = fruitOf(a);
         return fruit !== null && fruit !== '' && fruit === fruitOf(b);
@@ -132,24 +143,33 @@
             working[cell.row][cell.col] = null;
         });
 
-        const next = working.map(row => row.map(() => null));
+        const next = working.map(row => row.slice());
         const falls = [];
         const spawns = [];
 
+        // Closed cells stay put; fruit drops past them into the open cells below.
         for (let col = 0; col < cols; col++) {
-            let target = rows - 1;
-            for (let row = rows - 1; row >= 0; row--) {
+            const open = [];
+            for (let row = 0; row < rows; row++) {
+                if (!isHole(working[row][col])) open.push(row);
+            }
+
+            let slot = open.length - 1;
+            for (let index = open.length - 1; index >= 0; index--) {
+                const row = open[index];
                 const fruit = working[row][col];
                 if (fruit === null) continue;
+                const target = open[slot];
                 next[target][col] = fruit;
                 if (target !== row) {
                     falls.push({ from: { row, col }, to: { row: target, col }, fruit });
                 }
-                target--;
+                slot--;
             }
 
-            const emptyCount = target + 1;
-            for (let row = target; row >= 0; row--) {
+            const emptyCount = slot + 1;
+            for (let index = slot; index >= 0; index--) {
+                const row = open[index];
                 const fruit = randomFruit(rng, fruits);
                 next[row][col] = fruit;
                 spawns.push({ to: { row, col }, fromRow: row - emptyCount, fruit });
@@ -227,7 +247,7 @@
         const queue = [];
         const fired = [];
         const add = cell => {
-            if (!inBounds(board, cell)) return;
+            if (!isOpen(board, cell)) return;
             const key = cellKey(cell);
             if (chosen.has(key)) return;
             chosen.set(key, cell);
@@ -291,7 +311,7 @@
 
     // a: the cell the player dragged, b: the neighbor it was pushed into.
     function resolveMove(board, a, b, rng, fruits, specials = true) {
-        if (!inBounds(board, a) || !inBounds(board, b) || !isAdjacent(a, b)) {
+        if (!isOpen(board, a) || !isOpen(board, b) || !isAdjacent(a, b)) {
             return { valid: false };
         }
         const swappedBoard = swapCells(board, a, b);
@@ -326,7 +346,7 @@
         const seen = new Set();
         const cleared = cells.filter(cell => {
             const key = `${cell.row},${cell.col}`;
-            if (!inBounds(board, cell) || seen.has(key)) return false;
+            if (!isOpen(board, cell) || seen.has(key)) return false;
             seen.add(key);
             return true;
         });
@@ -374,7 +394,7 @@
                 const a = { row, col };
                 const neighbors = [{ row, col: col + 1 }, { row: row + 1, col }];
                 neighbors.forEach(b => {
-                    if (!inBounds(board, b) || fruitOf(board[a.row][a.col]) === fruitOf(board[b.row][b.col])) return;
+                    if (!isOpen(board, a) || !isOpen(board, b) || fruitOf(board[a.row][a.col]) === fruitOf(board[b.row][b.col])) return;
                     const groups = findMatches(swapCells(board, a, b));
                     const size = groups.reduce((sum, group) => sum + group.cells.length, 0);
                     if (size > 0 && (best === null || size > best.size)) {
@@ -421,24 +441,80 @@
     }
 
     function shuffle(board, rng) {
-        const rows = board.length;
-        const cols = board[0].length;
-        const flat = board.flat();
+        const open = [];
+        board.forEach((line, row) => line.forEach((value, col) => {
+            if (!isHole(value)) open.push({ row, col });
+        }));
+        const values = open.map(cell => board[cell.row][cell.col]);
 
         for (let attempt = 0; attempt < 100; attempt++) {
-            const items = flat.slice();
+            const items = values.slice();
             for (let i = items.length - 1; i > 0; i--) {
                 const j = Math.floor(rng() * (i + 1));
                 [items[i], items[j]] = [items[j], items[i]];
             }
-            const next = [];
-            for (let row = 0; row < rows; row++) {
-                next.push(items.slice(row * cols, (row + 1) * cols));
-            }
+            const next = cloneBoard(board);
+            open.forEach((cell, index) => { next[cell.row][cell.col] = items[index]; });
             if (findMatches(next).length === 0 && hasPossibleMove(next)) return next;
         }
 
-        return createBoard(rng, Array.from(new Set(flat)), cols, rows);
+        return refillOpen(board, rng, Array.from(new Set(values.map(fruitOf).filter(Boolean))));
+    }
+
+    // Fresh fruit in every open cell, no lines, at least one move. The last resort for a stuck board.
+    function refillOpen(board, rng, fruits) {
+        for (;;) {
+            const next = board.map(line => line.map(value => (isHole(value) ? HOLE : null)));
+            next.forEach((line, row) => line.forEach((value, col) => {
+                if (value === HOLE) return;
+                const options = fruits.filter(fruit => !makesLine(next, { row, col }, fruit));
+                next[row][col] = randomFruit(rng, options.length > 0 ? options : fruits);
+            }));
+            if (hasPossibleMove(next)) return next;
+        }
+    }
+
+    // Sets a board in the middle of a size x size frame of closed cells.
+    function frameBoard(board, size) {
+        const top = Math.floor((size - board.length) / 2);
+        const left = Math.floor((size - board[0].length) / 2);
+        const framed = [];
+        for (let row = 0; row < size; row++) {
+            const line = [];
+            for (let col = 0; col < size; col++) {
+                const inside = row >= top && row < top + board.length && col >= left && col < left + board[0].length;
+                line.push(inside ? board[row - top][col - left] : HOLE);
+            }
+            framed.push(line);
+        }
+        return framed;
+    }
+
+    // Closed cells touching the open part of the board: the ones that may open next.
+    function openableCells(board) {
+        const cells = [];
+        board.forEach((line, row) => line.forEach((value, col) => {
+            if (!isHole(value)) return;
+            const touching = [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dRow, dCol]) => isOpen(board, { row: row + dRow, col: col + dCol }));
+            if (touching) cells.push({ row, col });
+        }));
+        return cells;
+    }
+
+    // Opens one closed cell next to the board and stocks it with a fruit that makes no line.
+    function openCell(board, fruits, rng) {
+        const candidates = openableCells(board);
+        if (candidates.length === 0) return null;
+        const cell = candidates[Math.floor(rng() * candidates.length)];
+        const next = cloneBoard(board);
+        next[cell.row][cell.col] = null;
+        const options = fruits.filter(fruit => !makesLine(next, cell, fruit));
+        next[cell.row][cell.col] = randomFruit(rng, options.length > 0 ? options : fruits);
+        return { board: hasPossibleMove(next) ? next : shuffle(next, rng), cell };
+    }
+
+    function openCount(board) {
+        return board.reduce((sum, line) => sum + line.filter(value => !isHole(value)).length, 0);
     }
 
     // True if putting `fruit` at `cell` would complete a line of 3 with the fruits already there.
@@ -503,6 +579,12 @@
         specialOf,
         withSpecial,
         activationCells,
+        HOLE,
+        isHole,
+        frameBoard,
+        openableCells,
+        openCell,
+        openCount,
         findBestMove,
         hasPossibleMove,
         pickFruits,
