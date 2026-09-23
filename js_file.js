@@ -34,6 +34,8 @@ let sheetOpen = false;
 let hiddenPause = false;
 let expanding = false;
 let stageCardOpen = false;
+let openingCard = false; // the card that opens a new run: closing it starts the countdown
+let countingDown = false;
 const TUTORIAL_KEY = 'fruitMarketTutorialDone';
 const PRACTICE_LINES = {
     1: '과일을 밀어 같은 과일 3개를 한 줄로 맞춰 보세요',
@@ -365,7 +367,7 @@ function showFailedExpression(cells) {
 }
 
 function isPaused() {
-    return sheetOpen || hiddenPause || expanding || stageCardOpen || practiceDoneOpen;
+    return sheetOpen || hiddenPause || expanding || stageCardOpen || practiceDoneOpen || countingDown;
 }
 
 function canAcceptInput() {
@@ -886,7 +888,9 @@ function openStageCard() {
     const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
 
     renderBuilding(document.getElementById('stageCardBuilding'), stage);
-    document.getElementById('stageCardTitle').textContent = stage === 1 ? `${info.name} 개업!` : `${stage}단계 ${info.name} 개업!`;
+    document.getElementById('stageCardTitle').textContent = stage === 1
+        ? `${withRo(info.name)} 과일장사를 시작했습니다!`
+        : `${stage}단계 ${info.name} 개업!`;
 
     document.getElementById('stageCardFruit').hidden = !newFruit;
     if (newFruit) {
@@ -948,6 +952,10 @@ function stageCardRow(label, value, was) {
 function closeStageCard() {
     stageCardOpen = false;
     document.getElementById('stageCard').classList.remove('show');
+    if (openingCard) {
+        openingCard = false;
+        showCountdown();
+    }
 }
 
 function closeExpandSheet() {
@@ -1411,7 +1419,7 @@ function leavePractice() {
 function endPracticeAndOpenShop() {
     localStorage.setItem(TUTORIAL_KEY, 'true');
     leavePractice();
-    showCountdown();
+    actuallyStartGame();
 }
 
 // "튜토리얼 다시 하기" in the how-to-play popup.
@@ -1489,36 +1497,31 @@ function startGame() {
     document.getElementById('startScreen').style.display = 'none';
     document.body.classList.remove('on-start');
 
-    // First visit: the practice shop instead of the countdown
-    if (isTutorialDone()) {
-        showCountdown();
-    } else {
-        actuallyStartGame(true);
-    }
+    // First visit: the practice shop. Otherwise the opening card, then the countdown.
+    actuallyStartGame(!isTutorialDone());
 }
 
 function showCountdown() {
+    const session = gameSession;
     const countdownOverlay = document.getElementById('countdownOverlay');
     const countdownText = document.getElementById('countdownText');
+    countingDown = true;
 
-    // Show countdown overlay
     countdownOverlay.classList.add('show');
-
-    // Start with "Ready"
     countdownText.textContent = 'Ready';
     countdownText.className = 'countdown-text ready';
     countdownText.style.animation = 'countdownPulse 1s ease-out';
 
     setTimeout(() => {
-        // Change to "START!"
+        if (session !== gameSession) return;
         countdownText.textContent = 'START!';
         countdownText.className = 'countdown-text start';
         countdownText.style.animation = 'countdownPulse 1s ease-out';
 
         setTimeout(() => {
-            // Hide countdown and start game
+            if (session !== gameSession) return;
             countdownOverlay.classList.remove('show');
-            actuallyStartGame();
+            countingDown = false;
         }, 1000);
     }, 1000);
 }
@@ -1533,6 +1536,8 @@ function actuallyStartGame(practiceMode = false) {
     hiddenPause = false;
     expanding = false;
     stageCardOpen = false;
+    openingCard = false;
+    countingDown = false;
     practiceDoneOpen = false;
     practiceStep = 0;
     pointerStart = null;
@@ -1561,6 +1566,7 @@ function actuallyStartGame(practiceMode = false) {
         setPracticeStep(1);
     } else {
         openStageCard();
+        openingCard = true;
     }
     if (document.hidden) pauseForHidden();
 }
@@ -1602,6 +1608,9 @@ function restartGame() {
     document.getElementById('pauseOverlay').classList.remove('show');
     document.getElementById('expandSheet').classList.remove('show');
     document.getElementById('stageCard').classList.remove('show');
+    document.getElementById('countdownOverlay').classList.remove('show');
+    openingCard = false;
+    countingDown = false;
     document.getElementById('startScreen').style.display = 'flex';
     document.body.classList.add('on-start');
 

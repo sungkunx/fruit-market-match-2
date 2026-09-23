@@ -2095,6 +2095,7 @@ body.combo-bg-3 {
 .stage-card h2 {
     font-size: 24px;
     color: var(--awning-red);
+    word-break: keep-all; /* 한국어 제목이 낱자에서 끊기지 않게 */
 }
 
 .stage-card-fruit {
