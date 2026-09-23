@@ -6,24 +6,46 @@
         startCash: 500,
         fruitOrder: ['apple', 'banana', 'grape', 'kiwi', 'orange', 'strawberry', 'cherry'],
         frameSize: 7,
+        // 25 stages: six buildings of four steps each, then the endless space tower. Each step
+        // opens one more cell of the 7x7 frame, from the 5x5 start to the full board. Prices and
+        // rents climb geometrically from one building's values to the next across its four steps.
         // expandCost is what it takes to leave this stage. The last stage is endless.
+        startSize: 5,
         stages: [
-            { name: '천막', cols: 5, rows: 5, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 1680 },
-            { name: '좌판', cols: 6, rows: 5, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 9480 },
-            { name: '매대', cols: 6, rows: 6, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 40000 },
-            { name: '편의점', cols: 6, rows: 6, fruits: 5, price: 248, rent: 450, logistics: 21, expandCost: 95000 },
-            { name: '대형마트', cols: 6, rows: 7, fruits: 6, price: 740, rent: 1660, logistics: 72, expandCost: 165000 },
-            { name: '백화점', cols: 7, rows: 7, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 1400000 },
-            { name: '우주 최강 건물', cols: 7, rows: 7, fruits: 7, price: 8100, rent: 9000, logistics: 540, expandCost: null }
+            { name: '천막', building: 1, sub: 1, fruits: 4, price: 5, rent: 14, logistics: 0, expandCost: 580 },
+            { name: '천막', building: 1, sub: 2, fruits: 4, price: 7, rent: 19, logistics: 0, expandCost: 620 },
+            { name: '천막', building: 1, sub: 3, fruits: 4, price: 10, rent: 26, logistics: 0, expandCost: 1300 },
+            { name: '천막', building: 1, sub: 4, fruits: 4, price: 15, rent: 36, logistics: 0, expandCost: 2700 },
+            { name: '좌판', building: 2, sub: 1, fruits: 5, price: 21, rent: 50, logistics: 6, expandCost: 3200 },
+            { name: '좌판', building: 2, sub: 2, fruits: 5, price: 28, rent: 66, logistics: 8, expandCost: 3500 },
+            { name: '좌판', building: 2, sub: 3, fruits: 5, price: 36, rent: 87, logistics: 10, expandCost: 3700 },
+            { name: '좌판', building: 2, sub: 4, fruits: 5, price: 47, rent: 110, logistics: 13, expandCost: 5400 },
+            { name: '매대', building: 3, sub: 1, fruits: 5, price: 62, rent: 150, logistics: 16, expandCost: 7400 },
+            { name: '매대', building: 3, sub: 2, fruits: 5, price: 88, rent: 200, logistics: 17, expandCost: 10000 },
+            { name: '매대', building: 3, sub: 3, fruits: 5, price: 120, rent: 260, logistics: 18, expandCost: 13000 },
+            { name: '매대', building: 3, sub: 4, fruits: 5, price: 180, rent: 340, logistics: 20, expandCost: 19000 },
+            { name: '편의점', building: 4, sub: 1, fruits: 5, price: 250, rent: 450, logistics: 21, expandCost: 37000 },
+            { name: '편의점', building: 4, sub: 2, fruits: 5, price: 330, rent: 620, logistics: 29, expandCost: 50000 },
+            { name: '편의점', building: 4, sub: 3, fruits: 5, price: 430, rent: 860, logistics: 39, expandCost: 70000 },
+            { name: '편의점', building: 4, sub: 4, fruits: 5, price: 560, rent: 1200, logistics: 53, expandCost: 75000 },
+            { name: '대형마트', building: 5, sub: 1, fruits: 6, price: 740, rent: 1700, logistics: 72, expandCost: 88000 },
+            { name: '대형마트', building: 5, sub: 2, fruits: 6, price: 1000, rent: 2300, logistics: 91, expandCost: 95000 },
+            { name: '대형마트', building: 5, sub: 3, fruits: 6, price: 1400, rent: 3200, logistics: 110, expandCost: 100000 },
+            { name: '대형마트', building: 5, sub: 4, fruits: 6, price: 2000, rent: 4400, logistics: 140, expandCost: 110000 },
+            { name: '백화점', building: 6, sub: 1, fruits: 7, price: 2700, rent: 6000, logistics: 180, expandCost: 150000 },
+            { name: '백화점', building: 6, sub: 2, fruits: 7, price: 3600, rent: 6600, logistics: 240, expandCost: 190000 },
+            { name: '백화점', building: 6, sub: 3, fruits: 7, price: 4700, rent: 7300, logistics: 310, expandCost: 310000 },
+            { name: '백화점', building: 6, sub: 4, fruits: 7, price: 6200, rent: 8100, logistics: 410, expandCost: 720000 },
+            { name: '우주 최강 건물', building: 7, sub: 1, fruits: 7, price: 8100, rent: 9000, logistics: 540, expandCost: null }
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
-        tutorialStage: { name: '연습 천막', cols: 5, rows: 5, fruits: 3, price: 2, rent: 2, logistics: 0, expandCost: 200 },
+        tutorialStage: { name: '연습 천막', building: 1, sub: 1, fruits: 3, price: 2, rent: 2, logistics: 0, expandCost: 200 },
         // Practice pacing: seconds bubble 2 shows before the rent tip, and the least time the rent tip stays up.
         practiceRentTipSeconds: 4,
         practiceStepMinSeconds: 3,
         inflationRate: 1.15,
         inflationInterval: 30,
-        surchargeStage: 7,
+        surchargeStage: 25,
         surchargeRate: 1.2,
         // A new shop opens at half rent, pays full rent 30 seconds later, and from then on pays
         // more the longer it stays put.

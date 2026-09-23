@@ -9,13 +9,13 @@ const T = {
     fruitOrder: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
     frameSize: 7,
     stages: [
-        { name: 's1', cols: 5, rows: 5, fruits: 3, price: 2, rent: 10, logistics: 0, expandCost: 1000 },
-        { name: 's2', cols: 6, rows: 5, fruits: 4, price: 5, rent: 20, logistics: 6, expandCost: 2000 },
-        { name: 's3', cols: 6, rows: 6, fruits: 4, price: 6, rent: 30, logistics: 7, expandCost: 3000 },
-        { name: 's4', cols: 6, rows: 6, fruits: 5, price: 7, rent: 40, logistics: 8, expandCost: 4000 },
-        { name: 's5', cols: 6, rows: 7, fruits: 6, price: 8, rent: 50, logistics: 9, expandCost: 5000 },
-        { name: 's6', cols: 7, rows: 7, fruits: 7, price: 9, rent: 100, logistics: 10, expandCost: 6000 },
-        { name: 's7', cols: 7, rows: 7, fruits: 7, price: 10, rent: 200, logistics: 12, expandCost: null }
+        { name: 's1', building: 1, cols: 5, rows: 5, fruits: 3, price: 2, rent: 10, logistics: 0, expandCost: 1000 },
+        { name: 's2', building: 2, cols: 6, rows: 5, fruits: 4, price: 5, rent: 20, logistics: 6, expandCost: 2000 },
+        { name: 's3', building: 3, cols: 6, rows: 6, fruits: 4, price: 6, rent: 30, logistics: 7, expandCost: 3000 },
+        { name: 's4', building: 4, cols: 6, rows: 6, fruits: 5, price: 7, rent: 40, logistics: 8, expandCost: 4000 },
+        { name: 's5', building: 5, cols: 6, rows: 7, fruits: 6, price: 8, rent: 50, logistics: 9, expandCost: 5000 },
+        { name: 's6', building: 6, cols: 7, rows: 7, fruits: 7, price: 9, rent: 100, logistics: 10, expandCost: 6000 },
+        { name: 's7', building: 7, cols: 7, rows: 7, fruits: 7, price: 10, rent: 200, logistics: 12, expandCost: null }
     ],
     inflationRate: 1.5,
     inflationInterval: 30,
@@ -83,7 +83,7 @@ test('rent goes up by the inflation rate every 30 seconds of game time', () => {
 
 test('a new shop opens at a discount that eases away, then pays more the longer it stays', () => {
     const eased = { ...T, openingRelief: { start: 0.5, seconds: 30, climbAfter: 40, climbRate: 1.1, climbInterval: 20, climbMax: 2.5 } };
-    const pace = stageTime => Economy.stagePace(runAt({ stage: 5, stageTime }), eased);
+    const pace = buildingTime => Economy.stagePace(runAt({ stage: 5, buildingTime }), eased);
 
     assert.equal(pace(0), 0.5);
     assert.equal(pace(15), 0.75);
@@ -94,9 +94,9 @@ test('a new shop opens at a discount that eases away, then pays more the longer 
     // An ordinary stage's climb has a ceiling, however long the shop sits still.
     assertClose(pace(600), 2.5);
     // The endless stage has none.
-    assert.ok(Economy.stagePace(runAt({ stage: 6, stageTime: 600 }), eased) > 100);
+    assert.ok(Economy.stagePace(runAt({ stage: 6, buildingTime: 600 }), eased) > 100);
     // The endless stage climbs at its own steeper rate.
-    assertClose(Economy.stagePace(runAt({ stage: 6, stageTime: 60 }), eased), 2);
+    assertClose(Economy.stagePace(runAt({ stage: 6, buildingTime: 60 }), eased), 2);
 });
 
 test('the reserve for the next stage counts its opening discount, not its full rent', () => {
@@ -105,11 +105,11 @@ test('the reserve for the next stage counts its opening discount, not its full r
 });
 
 test('the surcharge only applies at the surcharge stage and grows every 20 seconds there', () => {
-    assert.equal(Economy.currentRent(runAt({ stage: 5, stageTime: 40 }), T), 50);
-    assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 19.9 }), T), 100);
-    assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 20 }), T), 200);
-    assert.equal(Economy.currentRent(runAt({ stage: 6, stageTime: 40, time: 30 }), T), 600);
-    assert.equal(Economy.stagePace(runAt({ stage: 6, stageTime: 40 }), T), 4);
+    assert.equal(Economy.currentRent(runAt({ stage: 5, buildingTime: 40 }), T), 50);
+    assert.equal(Economy.currentRent(runAt({ stage: 6, buildingTime: 19.9 }), T), 100);
+    assert.equal(Economy.currentRent(runAt({ stage: 6, buildingTime: 20 }), T), 200);
+    assert.equal(Economy.currentRent(runAt({ stage: 6, buildingTime: 40, time: 30 }), T), 600);
+    assert.equal(Economy.stagePace(runAt({ stage: 6, buildingTime: 40 }), T), 4);
 });
 
 test('logistics is charged once every 5 seconds', () => {
@@ -258,3 +258,34 @@ test('a normal run is not a tutorial run and still goes bankrupt', () => {
     assert.equal(Economy.isBankrupt(Economy.tick({ ...run, cash: 3 }, T, 1)), true);
 });
 
+
+test('the steps of one building share its clock: the discount does not come back at step two', () => {
+    const shared = {
+        ...T,
+        stages: [
+            { ...T.stages[0], building: 1 },
+            { ...T.stages[1], building: 1 },
+            { ...T.stages[2], building: 2 },
+            ...T.stages.slice(3)
+        ],
+        openingRelief: { start: 0.5, seconds: 30, climbAfter: 60, climbRate: 1.1, climbInterval: 20, climbMax: 2.5 }
+    };
+    const inside = Economy.expand(runAt({ cash: 100000, buildingTime: 25 }), shared);
+    assert.equal(inside.stage, 2);
+    assert.equal(inside.stageTime, 0);
+    assert.equal(inside.buildingTime, 25);
+
+    const nextBuilding = Economy.expand({ ...inside, cash: 100000 }, shared);
+    assert.equal(nextBuilding.stage, 3);
+    assert.equal(nextBuilding.buildingTime, 0);
+});
+
+test('the reserve for the next step of the same building uses today\'s pace, not the opening discount', () => {
+    const shared = {
+        ...T,
+        stages: [{ ...T.stages[0], building: 1 }, { ...T.stages[1], building: 1 }, ...T.stages.slice(2)],
+        openingRelief: { start: 0.5, seconds: 30, climbAfter: 60, climbRate: 1.1, climbInterval: 20, climbMax: 2.5 }
+    };
+    // Stage 2 rent is 20; 30 seconds into the building the discount is gone.
+    assert.equal(Economy.projectedRent(runAt({ stage: 1, buildingTime: 30 }), shared, 2), 20);
+});

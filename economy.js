@@ -20,6 +20,8 @@
             revenue: 0,
             time: 0,
             stageTime: 0,
+            // Time inside the current building. Its steps share one opening discount and one climb.
+            buildingTime: 0,
             logisticsTimer: 0,
             combo: Scoring.createScoreState(),
             maxMultiplier: 1.0,
@@ -46,10 +48,11 @@
     // expensive to sit still.
     function stagePace(state, tuning) {
         const relief = tuning.openingRelief;
+        const elapsed = state.buildingTime === undefined ? state.stageTime : state.buildingTime;
         const eased = relief.seconds > 0
-            ? Math.min(1, relief.start + (1 - relief.start) * (state.stageTime / relief.seconds))
+            ? Math.min(1, relief.start + (1 - relief.start) * (elapsed / relief.seconds))
             : 1;
-        const camped = Math.max(0, state.stageTime - relief.climbAfter);
+        const camped = Math.max(0, elapsed - relief.climbAfter);
         const endless = state.stage === tuning.surchargeStage;
         const rate = endless ? tuning.surchargeRate : relief.climbRate;
         const climb = Math.pow(rate, Math.floor(camped / relief.climbInterval));
@@ -62,9 +65,17 @@
         return stageInfo(state, tuning).rent * inflation(state, tuning) * stagePace(state, tuning) * state.modifiers.rent;
     }
 
-    // Rent per second the shop would pay the moment it moved to `stage`, opening discount and all.
+    function sameBuilding(tuning, stageA, stageB) {
+        return tuning.stages[stageA - 1].building === tuning.stages[stageB - 1].building;
+    }
+
+    // Rent per second the shop would pay the moment it moved to `stage`. A new building opens at
+    // its discount; the next step of the same building carries on where this one is.
     function projectedRent(state, tuning, stage) {
-        return tuning.stages[stage - 1].rent * inflation(state, tuning) * tuning.openingRelief.start * state.modifiers.rent;
+        const pace = sameBuilding(tuning, state.stage, stage)
+            ? stagePace({ ...state, stage }, tuning)
+            : tuning.openingRelief.start;
+        return tuning.stages[stage - 1].rent * inflation(state, tuning) * pace * state.modifiers.rent;
     }
 
     function currentLogistics(state, tuning) {
@@ -91,6 +102,7 @@
             cash: keepTutorialCash(state, cash),
             time: round3(state.time + dt),
             stageTime: round3(state.stageTime + dt),
+            buildingTime: round3((state.buildingTime || 0) + dt),
             logisticsTimer,
             combo: { ...state.combo, multiplier: Scoring.decayMultiplier(state.combo.multiplier, dt, tuning.multiplierDecay) }
         };
@@ -143,11 +155,13 @@
     // Pays for the next stage. The last stage is endless: the run goes on until bankruptcy.
     function expand(state, tuning) {
         if (!canExpand(state, tuning)) return state;
+        const stage = state.stage + 1;
         return {
             ...state,
             cash: state.cash - nextExpandCost(state, tuning),
-            stage: state.stage + 1,
-            stageTime: 0
+            stage,
+            stageTime: 0,
+            buildingTime: sameBuilding(tuning, state.stage, stage) ? state.buildingTime || 0 : 0
         };
     }
 
@@ -173,6 +187,7 @@
         createRun,
         inflation,
         stagePace,
+        sameBuilding,
         currentRent,
         projectedRent,
         currentLogistics,

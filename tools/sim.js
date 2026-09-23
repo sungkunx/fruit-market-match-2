@@ -36,8 +36,10 @@ function validMoves(board) {
     const moves = [];
     for (let row = 0; row < board.length; row++) {
         for (let col = 0; col < board[0].length; col++) {
+            if (Board.isHole(board[row][col])) continue;
             [{ row, col: col + 1 }, { row: row + 1, col }].forEach(other => {
                 if (other.row >= board.length || other.col >= board[0].length) return;
+                if (Board.isHole(board[other.row][other.col])) return;
                 const swapped = board.map(line => line.slice());
                 swapped[row][col] = board[other.row][other.col];
                 swapped[other.row][other.col] = board[row][col];
@@ -62,7 +64,7 @@ function playRun(interval, seed) {
     const rng = seededRng(seed);
     const first = Tuning.stages[0];
     let run = Economy.createRun(Tuning);
-    let board = Board.createBoard(rng, fruitsFor(1), first.cols, first.rows);
+    let board = Board.frameBoard(Board.createBoard(rng, fruitsFor(1), Tuning.startSize, Tuning.startSize), Tuning.frameSize);
     let nextSwapAt = interval;
     const reachedAt = [];
 
@@ -105,8 +107,8 @@ function playRun(interval, seed) {
         if (Economy.canExpand(run, Tuning)) {
             run = Economy.expand(run, Tuning);
             reachedAt.push(Math.round(run.time));
-            const info = Tuning.stages[run.stage - 1];
-            board = Board.expandBoard(board, fruitsFor(run.stage), info.cols, info.rows, rng).board;
+            const opened = Board.openCell(board, fruitsFor(run.stage), rng);
+            if (opened) board = opened.board;
         }
     }
 
@@ -124,7 +126,7 @@ function formatTime(seconds) {
 
 const runsPerPlayer = Number(process.argv[2]) || 10;
 console.log(`runs per player: ${runsPerPlayer}`);
-console.log('player      | stage 7 | median time | median stage | median score | stage reached at (median run)');
+console.log('player      | top     | median time | median stage | median score | building reached at (median run)');
 PLAYERS.forEach(player => {
     const runs = [];
     for (let seed = 1; seed <= runsPerPlayer; seed++) runs.push(playRun(player.interval, seed));
@@ -137,6 +139,10 @@ PLAYERS.forEach(player => {
         formatTime(median(runs.map(r => r.time))).padStart(11),
         String(median(runs.map(r => r.stage))).padStart(12),
         medianScore.toLocaleString('en-US').padStart(12),
-        typical.reachedAt.map((t, i) => `${i + 2}@${t}s`).join(' ')
+        typical.reachedAt
+            .map((t, i) => ({ t, stage: i + 2 }))
+            .filter(entry => Tuning.stages[entry.stage - 1].sub === 1)
+            .map(entry => `${Tuning.stages[entry.stage - 1].name}@${entry.t}s`)
+            .join(' ')
     ].join(' | '));
 });
