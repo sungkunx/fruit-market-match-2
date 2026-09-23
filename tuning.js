@@ -39,7 +39,7 @@
             { name: '우주 최강 건물', building: 7, sub: 1, fruits: 7, price: 8100, rent: 9000, logistics: 540, expandCost: null }
         ],
         // The one-time practice shop (tutorial). It replaces the first stage for that run only.
-        tutorialStage: { name: '연습 천막', building: 1, sub: 1, fruits: 3, price: 2, rent: 2, logistics: 0, expandCost: 200 },
+        tutorialStage: { name: '연습 천막', building: 1, sub: 0, fruits: 3, price: 2, rent: 2, logistics: 0, expandCost: 200 },
         // Practice pacing: seconds bubble 2 shows before the rent tip, and the least time the rent tip stays up.
         practiceRentTipSeconds: 4,
         practiceStepMinSeconds: 3,

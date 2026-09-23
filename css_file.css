@@ -976,6 +976,49 @@ body.combo-bg-3 {
     overflow: hidden; /* 6·7단계 건물은 윗부분이 잘린다 */
 }
 
+/* 가게 위 하늘: 건물마다 아침 → 낮 → 노을 → 밤. 우주 건물은 별밤 */
+.shop-area::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: 0 0 14px 14px;
+    opacity: 0.85;
+    transition: background 1.2s ease;
+}
+
+.shop-area[data-daytime="dawn"]::before {
+    background: linear-gradient(180deg, #FFD9B0 0%, #FFB895 100%);
+}
+
+.shop-area[data-daytime="day"]::before {
+    background: linear-gradient(180deg, #9FD8FF 0%, #DDF2FF 100%);
+}
+
+.shop-area[data-daytime="dusk"]::before {
+    background: linear-gradient(180deg, #C8638F 0%, #FF9F5A 100%);
+}
+
+.shop-area[data-daytime="night"]::before {
+    background:
+        radial-gradient(circle at 18% 22%, #fff 0 1.5px, transparent 2px),
+        radial-gradient(circle at 62% 14%, #fff 0 1px, transparent 1.5px),
+        radial-gradient(circle at 84% 34%, #fff 0 1.5px, transparent 2px),
+        radial-gradient(circle at 38% 40%, #fff 0 1px, transparent 1.5px),
+        linear-gradient(180deg, #221C4A 0%, #4A3D84 100%);
+}
+
+.shop-area[data-daytime="space"]::before {
+    background:
+        radial-gradient(circle at 12% 18%, #fff 0 1.5px, transparent 2px),
+        radial-gradient(circle at 30% 60%, #fff 0 1px, transparent 1.5px),
+        radial-gradient(circle at 55% 25%, var(--neon) 0 1.5px, transparent 2px),
+        radial-gradient(circle at 72% 50%, #fff 0 1px, transparent 1.5px),
+        radial-gradient(circle at 90% 20%, #fff 0 1.5px, transparent 2px),
+        radial-gradient(circle at 45% 80%, #fff 0 1px, transparent 1.5px),
+        linear-gradient(180deg, #07061C 0%, #2B2356 100%);
+}
+
 .stage-badge {
     position: absolute;
     top: 10px;
@@ -1441,6 +1484,51 @@ body.combo-bg-3 {
 }
 
 /* ---------- 보드 프레임 ---------- */
+
+/* 같은 건물 안에서 한 단계 오를 때 가게 위에 잠깐 뜨는 알림 */
+.step-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 34px;
+    z-index: 5;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--wood-dark);
+    background: var(--gold);
+    border: 3px solid var(--wood-dark);
+    border-radius: 999px;
+    box-shadow: 0 3px 0 var(--wood-dark);
+    pointer-events: none;
+    animation: stepToast 1.8s ease-out forwards;
+}
+
+@keyframes stepToast {
+    0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); }
+    15% { opacity: 1; transform: translate(-50%, 0) scale(1.05); }
+    25% { transform: translate(-50%, 0) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+
+/* 7×7 틀에서 아직 열리지 않은 칸 */
+.cell.closed {
+    background: rgba(90, 51, 16, 0.55);
+    background-clip: content-box;
+    box-shadow: inset 0 0 0 2px rgba(90, 51, 16, 0.25);
+    cursor: default;
+}
+
+/* 방금 열린 칸이 금빛으로 한 번 빛난다 */
+.cell.just-opened {
+    animation: cellOpened 0.9s ease-out;
+}
+
+@keyframes cellOpened {
+    0% { background-color: var(--gold); box-shadow: 0 0 18px var(--gold); }
+    100% { background-color: rgba(90, 51, 16, 0.07); box-shadow: none; }
+}
 
 /* 판 위에서 태어나는 특수 과일 */
 .fruit[data-special] {
@@ -2271,6 +2359,8 @@ body.combo-bg-3 {
     .cost-line.cost-bump,
     .celebrate-flash,
     .fruit.special-born,
+    .cell.just-opened,
+    .step-toast,
     .fruit[data-special]::after,
     .fruit[data-special]::before,
     .blast-fx,

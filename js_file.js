@@ -56,6 +56,7 @@ let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
+const STEP_TOAST_MS = 1800;
 const BLAST_FX_MS = 700; // how long a blast drawing stays on the board
 const BLAST_LEAD_MS = 130; // the beam reaches the fruits a moment before they pop
 const CELEBRATE_MS = 2600; // how long the confetti keeps falling after a new shop opens
@@ -117,6 +118,18 @@ function toggleSound() {
     GameAudio.init();
     GameAudio.setMuted(!GameAudio.isMuted());
     updateSoundButtons();
+    playTitleMusic();
+}
+
+function onStartScreen() {
+    return document.body.classList.contains('on-start');
+}
+
+// The title tune plays while the start screen is up. Browsers only allow sound after the first
+// touch, so this runs from a tap (the first one anywhere, the sound button, or coming home).
+function playTitleMusic() {
+    if (!onStartScreen() || GameAudio.isMuted() || GameAudio.isPlayingTitle()) return;
+    GameAudio.startTitleMusic();
 }
 
 function formatMoney(value) {
@@ -125,6 +138,35 @@ function formatMoney(value) {
 
 function stageInfo(stage) {
     return rules.stages[stage - 1];
+}
+
+// "천막 2", or just the name for a building with one step (the space tower).
+function stageLabelIn(stages, stage) {
+    const info = stages[stage - 1];
+    const steps = stages.filter(entry => entry.building === info.building).length;
+    // The practice shop (step 0) and the one-step tower go by their name alone.
+    return steps > 1 && info.sub > 0 ? `${info.name} ${info.sub}` : info.name;
+}
+
+function stageLabel(stage) {
+    return stageLabelIn(rules.stages, stage);
+}
+
+function buildingOf(stage) {
+    return stageInfo(stage).building;
+}
+
+function isNewBuilding(stage) {
+    return stage === 1 || buildingOf(stage) !== buildingOf(stage - 1);
+}
+
+// Morning, noon, dusk and night: the sky over each building runs through one day.
+const DAYTIMES = ['dawn', 'day', 'dusk', 'night'];
+
+function daytimeOf(stage) {
+    const info = stageInfo(stage);
+    const steps = rules.stages.filter(entry => entry.building === info.building).length;
+    return steps > 1 ? DAYTIMES[Math.max(0, info.sub - 1) % DAYTIMES.length] : 'space';
 }
 
 function fruitsForStage(stage) {
@@ -184,6 +226,7 @@ function setCellFruit(cell, value, frame = '001') {
     const special = Board.specialOf(value);
     const img = fruitImage(cell);
     const wrapper = fruitWrapper(cell);
+    cellElements[cell.row][cell.col].classList.toggle('closed', Board.isHole(value));
     if (special) wrapper.dataset.special = special;
     else delete wrapper.dataset.special;
     img.dataset.fruit = fruit || '';
@@ -213,11 +256,12 @@ function renderBoard() {
     }
 }
 
+// Every run starts from the 5x5 middle of the 7x7 frame.
 function newBoard(stage) {
-    const info = stageInfo(stage);
     activeFruits = fruitsForStage(stage);
-    board = Board.createBoard(Math.random, activeFruits, info.cols, info.rows);
-    buildGrid(info.cols, info.rows);
+    const start = Board.createBoard(Math.random, activeFruits, rules.startSize, rules.startSize);
+    board = Board.frameBoard(start, rules.frameSize);
+    buildGrid(rules.frameSize, rules.frameSize);
     renderBoard();
 }
 
@@ -384,7 +428,7 @@ function onGridPointerDown(event) {
     if (!canAcceptInput() || pointerStart) return;
     if (event.button !== 0) return;
     const cell = cellFromEvent(event);
-    if (!cell) return;
+    if (!cell || Board.isHole(board[cell.row][cell.col])) return;
 
     event.preventDefault();
     document.getElementById('grid').setPointerCapture(event.pointerId);
@@ -407,7 +451,7 @@ function onGridPointerMove(event) {
         : { row: from.row + Math.sign(dy), col: from.col };
     pointerStart = null;
 
-    if (to.row < 0 || to.row >= board.length || to.col < 0 || to.col >= board[0].length) {
+    if (to.row < 0 || to.row >= board.length || to.col < 0 || to.col >= board[0].length || Board.isHole(board[to.row][to.col])) {
         setCellFrame(from, '001');
         return;
     }
@@ -697,6 +741,9 @@ function themeColor(name) {
 
 // The last 30 seconds behind the shop: revenue as a filled slope, cash as a line.
 function drawShopGraph() {
+    // Violet disappears into the night sky; the dark skies get a bright line instead.
+    const daytime = document.querySelector('.shop-area').dataset.daytime;
+    const revenueColor = daytime === 'night' || daytime === 'space' ? '--neon' : '--violet';
     const canvas = document.getElementById('shopGraph');
     const ratio = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
@@ -729,12 +776,12 @@ function drawShopGraph() {
     context.lineTo(x(samples[0]), heightPx);
     context.closePath();
     context.globalAlpha = 0.3;
-    context.fillStyle = themeColor('--violet');
+    context.fillStyle = themeColor(revenueColor);
     context.fill();
 
     context.globalAlpha = 0.85;
     context.lineWidth = 3;
-    context.strokeStyle = themeColor('--violet');
+    context.strokeStyle = themeColor(revenueColor);
     context.beginPath();
     samples.forEach((sample, index) => {
         context[index === 0 ? 'moveTo' : 'lineTo'](x(sample), revenueY(sample));
@@ -765,7 +812,8 @@ function clearShopGraph() {
     context.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-// Draws the building for `stage` into `container`. Uses img/building_N.png when it exists.
+// Draws building number `stage` (1 = 천막 ... 7 = 우주) into `container`. Uses
+// img/building_N.png when it exists. Callers pass buildingOf(stage), not the step.
 function renderBuilding(container, stage) {
     container.innerHTML = '';
     const building = document.createElement('div');
@@ -795,10 +843,10 @@ function renderBuilding(container, stage) {
 }
 
 function updateStage() {
-    const info = stageInfo(run.stage);
     document.getElementById('stageNumber').textContent = `${run.stage}단계`;
-    document.getElementById('stageName').textContent = info.name;
-    return renderBuilding(document.getElementById('buildingSlot'), run.stage);
+    document.getElementById('stageName').textContent = stageLabel(run.stage);
+    document.querySelector('.shop-area').dataset.daytime = daytimeOf(run.stage);
+    return renderBuilding(document.getElementById('buildingSlot'), buildingOf(run.stage));
 }
 
 // "좌판으로", "매대로": 로 after a vowel or ㄹ, 으로 after any other final consonant.
@@ -818,8 +866,9 @@ function updateExpandButton() {
     }
     sign.hidden = false;
 
-    const nextName = stageInfo(run.stage + 1).name;
-    document.getElementById('expandTitle').textContent = `${withRo(nextName)} 확장 · ${formatMoney(cost)}`;
+    const next = run.stage + 1;
+    const title = isNewBuilding(next) ? `${withRo(stageInfo(next).name)} 확장` : `다음 ${stageLabel(next)}`;
+    document.getElementById('expandTitle').textContent = `${title} · ${formatMoney(cost)}`;
 
     const ready = gameRunning && Economy.canExpand(run, rules);
     const shortfall = formatMoney(Economy.expandRequirement(run, rules) - Math.max(0, run.cash));
@@ -843,14 +892,14 @@ function openExpandSheet() {
     document.getElementById('sheetCost').textContent = '−' + formatMoney(cost);
     document.getElementById('sheetSummary').textContent = `수익 ${formatMoney(run.cash)} → ${formatMoney(cashAfter)} · 새 임대료 ${Math.floor(cashAfter / nextRent)}초분 확보`;
 
-    renderBuilding(document.getElementById('sheetFrom'), run.stage);
-    renderBuilding(document.getElementById('sheetTo'), nextStage);
+    renderBuilding(document.getElementById('sheetFrom'), buildingOf(run.stage));
+    renderBuilding(document.getElementById('sheetTo'), buildingOf(nextStage));
 
     const newFruit = rules.fruitOrder[next.fruits - 1];
     const hasNewFruit = next.fruits > current.fruits;
     const changes = [
         ['임대료', `${formatMoney(Economy.currentRent(run, rules))} → ${formatMoney(nextRent)} /초`],
-        ['진열대', `${current.cols}×${current.rows} → ${next.cols}×${next.rows}`],
+        ['진열대', `${Board.openCount(board)}칸 → ${Board.openCount(board) + 1}칸`],
         ['과일', hasNewFruit ? `${FRUIT_NAMES[newFruit]} 입고 (${next.fruits}종)` : `그대로 (${next.fruits}종)`, hasNewFruit ? fruitSrc(newFruit, '001') : null]
     ];
     const list = document.getElementById('sheetChanges');
@@ -887,10 +936,10 @@ function openStageCard() {
     const newFruit = previous && info.fruits > previous.fruits ? rules.fruitOrder[info.fruits - 1] : null;
     const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
 
-    renderBuilding(document.getElementById('stageCardBuilding'), stage);
+    renderBuilding(document.getElementById('stageCardBuilding'), buildingOf(stage));
     document.getElementById('stageCardTitle').textContent = stage === 1
         ? `${withRo(info.name)} 과일장사를 시작했습니다!`
-        : `${stage}단계 ${info.name} 개업!`;
+        : `${info.name} 개업!`;
 
     document.getElementById('stageCardFruit').hidden = !newFruit;
     if (newFruit) {
@@ -902,7 +951,7 @@ function openStageCard() {
     const before = previous ? { ...run, stage: stage - 1, stageTime: 0 } : null;
     const upkeepText = state => `${formatMoney(Economy.currentRent(state, rules) + Economy.currentLogistics(state, rules) / rules.logisticsInterval)}/초`;
     const rows = [
-        ['진열대', `${info.cols}×${info.rows}`, previous ? `${previous.cols}×${previous.rows}` : null],
+        ['진열대', `${Board.openCount(board)}칸`, previous ? `${Board.openCount(board) - 1}칸` : null],
         ['과일', `${info.fruits}종`, previous ? `${previous.fruits}종` : null],
         ['과일 1개 값', formatMoney(Economy.currentPrice(run, rules)), before ? formatMoney(Economy.currentPrice(before, rules)) : null],
         ['유지비', upkeepText(run), before ? upkeepText(before) : null],
@@ -913,7 +962,7 @@ function openStageCard() {
     list.innerHTML = '';
     rows.forEach(([label, value, was]) => list.appendChild(stageCardRow(label, value, was)));
 
-    document.getElementById('stageCardTip').textContent = STAGE_TIPS[stage - 1];
+    document.getElementById('stageCardTip').textContent = STAGE_TIPS[buildingOf(stage) - 1];
     stageCardOpen = true;
     document.getElementById('stageCard').classList.add('show');
 }
@@ -967,8 +1016,15 @@ function closeExpandSheet() {
 // screen. In the practice shop it waits until the rent lesson has been shown (step 4).
 function offerExpansion() {
     if (!canAcceptInput() || !Economy.canExpand(run, rules)) return;
-    if (run.tutorial && practiceStep !== 4) return;
-    openExpandSheet();
+    if (run.tutorial) {
+        if (practiceStep === 4) openExpandSheet();
+        return;
+    }
+    if (isNewBuilding(run.stage + 1)) {
+        openExpandSheet();
+    } else {
+        stepUp();
+    }
 }
 
 async function confirmExpand() {
@@ -1035,22 +1091,51 @@ async function showNewBuilding() {
     ], { duration: 500, easing: 'ease-out' });
 }
 
-// Grows the board to the new stage's size; new cells drop in from above.
+// The shop grew: one closed cell next to the board opens, glows, and a fruit drops into it.
 async function growBoard(session) {
-    const info = stageInfo(run.stage);
     activeFruits = fruitsForStage(run.stage);
-    const grown = Board.expandBoard(board, activeFruits, info.cols, info.rows, Math.random);
-    board = grown.board;
-    buildGrid(info.cols, info.rows);
+    const opened = Board.openCell(board, activeFruits, Math.random);
+    if (!opened) return;
+    board = opened.board;
     renderBoard();
 
-    const pitch = cellPitch();
-    await Promise.all(grown.added.map(cell => animate(fruitWrapper(cell), [
-        { transform: `translateY(${-pitch}px) scale(0.4)`, opacity: 0 },
+    const element = cellElements[opened.cell.row][opened.cell.col];
+    element.classList.add('just-opened');
+    setTimeout(() => element.classList.remove('just-opened'), 900);
+    await animate(fruitWrapper(opened.cell), [
+        { transform: `translateY(${-cellPitch()}px) scale(0.3)`, opacity: 0 },
+        { transform: 'translateY(0px) scale(1.2)', opacity: 1, offset: 0.7 },
         { transform: 'translateY(0px) scale(1)', opacity: 1 }
-    ], { duration: 350, delay: 40 * cell.col, easing: 'ease-out' })));
+    ], { duration: 420, easing: 'ease-out' });
     if (session !== gameSession) return;
-    grown.added.forEach(cell => clearAnimations(cell));
+    clearAnimations(opened.cell);
+}
+
+// A small note over the shop for a step up. It never covers the board.
+function showStepToast(text) {
+    const toast = document.createElement('div');
+    toast.className = 'step-toast';
+    toast.textContent = text;
+    document.querySelector('.shop-area').appendChild(toast);
+    setTimeout(() => toast.remove(), STEP_TOAST_MS);
+}
+
+// Moving up a step inside the same building happens in play: no sheet, no card, no pause.
+async function stepUp() {
+    const session = gameSession;
+    isAnimating = true;
+    run = Economy.expand(run, rules);
+    GameAudio.playSuccess(2);
+    updateStage();
+    updateDashboard();
+    showStepToast(`${stageLabel(run.stage)} · 진열대 한 칸 늘었어요`);
+    await growBoard(session);
+    if (session !== gameSession) return;
+    isAnimating = false;
+    updateBoardInfo();
+    if (gameRunning && Economy.isBankrupt(run)) {
+        endRun();
+    }
 }
 
 // The revenue number rolls up instead of jumping, and gives a little pop when it grows.
@@ -1203,7 +1288,7 @@ function updateDanger() {
 function updateBoardInfo() {
     const info = stageInfo(run.stage);
     const inflationPercent = Math.round((Economy.inflation(run, rules) - 1) * 100);
-    let text = `진열대 ${info.cols}×${info.rows} · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
+    let text = `진열대 ${Board.openCount(board)}칸 · 과일 ${info.fruits}종 · 물가 +${inflationPercent}%`;
     const pacePercent = Math.round((Economy.stagePace(run, rules) - 1) * 100);
     if (pacePercent < 0) {
         text += ` · 입점 할인 ${pacePercent}%`;
@@ -1316,8 +1401,8 @@ function showResult() {
     const isNewPersonalBest = score > highestScore;
     document.getElementById('newRecordBadge').hidden = !isNewPersonalBest;
 
-    renderBuilding(document.getElementById('resultBuilding'), run.stage);
-    document.getElementById('resultGrade').textContent = `${run.stage}단계 ${stageInfo(run.stage).name}`;
+    renderBuilding(document.getElementById('resultBuilding'), buildingOf(run.stage));
+    document.getElementById('resultGrade').textContent = stageLabel(run.stage);
     document.getElementById('resultMaxMultiplier').textContent = `x${run.maxMultiplier.toFixed(1)}`;
     document.getElementById('resultMaxChain').textContent = run.maxChain;
 
@@ -1613,6 +1698,7 @@ function restartGame() {
     countingDown = false;
     document.getElementById('startScreen').style.display = 'flex';
     document.body.classList.add('on-start');
+    playTitleMusic();
 
     // Reset siren warning
     document.getElementById('sirenWarning').classList.remove('siren-active');
@@ -1641,7 +1727,9 @@ function saveGameData() {
     const gameData = {
         lastScore: lastScore,
         highestScore: highestScore,
-        bestStage: bestStage
+        bestStage: bestStage,
+        // 2: the 25-step table. Records without it count the old seven stages.
+        stageTableVersion: 2
     };
     localStorage.setItem('fruitMarketGrowthData', JSON.stringify(gameData));
 }
@@ -1652,7 +1740,10 @@ function loadGameData() {
         const gameData = JSON.parse(savedData);
         lastScore = gameData.lastScore || 0;
         highestScore = gameData.highestScore || 0;
-        bestStage = Math.min(Tuning.stages.length, Math.max(1, gameData.bestStage || 1));
+        const saved = gameData.bestStage || 1;
+        // An old record counted seven stages: stage k becomes the first step of building k.
+        const migrated = gameData.stageTableVersion === 2 ? saved : (saved - 1) * 4 + 1;
+        bestStage = Math.min(Tuning.stages.length, Math.max(1, migrated));
     }
     updateStartScreenStats();
 }
@@ -1660,8 +1751,8 @@ function loadGameData() {
 function updateStartScreenStats() {
     document.getElementById('lastScore').textContent = formatMoney(lastScore);
     document.getElementById('highestScore').textContent = formatMoney(highestScore);
-    document.getElementById('bestStageName').textContent = `${bestStage}단계 ${Tuning.stages[bestStage - 1].name}`;
-    renderBuilding(document.getElementById('startBuildingSlot'), bestStage);
+    document.getElementById('bestStageName').textContent = stageLabelIn(Tuning.stages, bestStage);
+    renderBuilding(document.getElementById('startBuildingSlot'), Tuning.stages[bestStage - 1].building);
 }
 
 // The shop the player has grown stands on the start screen, with a few customers dancing in front.
@@ -1999,6 +2090,8 @@ document.addEventListener('visibilitychange', () => {
         pauseForHidden();
     }
 });
+
+document.addEventListener('pointerdown', playTitleMusic);
 
 // Initialize
 loadGameData();

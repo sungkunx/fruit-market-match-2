@@ -53,6 +53,36 @@
         return events;
     }
 
+    // The title screen's own tune: slower and softer than the shop, a music box over gentle
+    // chords, no drums. Same four chords, its own melody.
+    const TITLE_BPM = 92;
+    const TITLE_MELODY = [
+        76, null, 79, null, 84, null, 83, null, 79, null, null, null, 76, null, 74, null,
+        72, null, 76, null, 81, null, 79, null, 76, null, null, null, 72, null, null, null,
+        77, null, 81, null, 84, null, 81, null, 77, null, 76, null, 74, null, null, null,
+        74, null, 79, null, 83, null, 81, null, 79, null, 77, null, 74, null, null, null
+    ];
+
+    // Which instruments play on a given sixteenth of the title tune. Pure: safe to test in Node.
+    function titleStep(step) {
+        const index = ((step % LOOP_STEPS) + LOOP_STEPS) % LOOP_STEPS;
+        const bar = Math.floor(index / STEPS_PER_BAR);
+        const beatStep = index % STEPS_PER_BAR;
+        const chord = CHORDS[bar];
+        const events = [];
+
+        if (beatStep === 0) {
+            chord.forEach(midi => events.push({ instrument: 'pad', midi }));
+        }
+        if (beatStep === 0 || beatStep === 8) {
+            events.push({ instrument: 'softbass', midi: chord[0] - 12 });
+        }
+        if (TITLE_MELODY[index] !== null) {
+            events.push({ instrument: 'box', midi: TITLE_MELODY[index] });
+        }
+        return events;
+    }
+
     function midiToFreq(midi) {
         return 440 * Math.pow(2, (midi - 69) / 12);
     }
@@ -85,6 +115,7 @@
     let nextStepTime = 0;
     let intensity = 0;
     let bpm = NORMAL_BPM;
+    let track = 'shop'; // 'shop' in a run, 'title' on the start screen
 
     function init() {
         if (context) {
@@ -200,6 +231,15 @@
             case 'sparkle':
                 playTone(musicGain, time, { type: 'square', freq: midiToFreq(event.midi), peak: 0.08, duration: 0.08 });
                 break;
+            case 'pad':
+                playTone(musicGain, time, { type: 'triangle', freq: midiToFreq(event.midi), peak: 0.14, duration: 2.4 });
+                break;
+            case 'softbass':
+                playTone(musicGain, time, { type: 'sine', freq: midiToFreq(event.midi), peak: 0.35, duration: 0.9 });
+                break;
+            case 'box':
+                playTone(musicGain, time, { type: 'sine', freq: midiToFreq(event.midi), peak: 0.32, duration: 0.7, harmonic: true });
+                break;
         }
     }
 
@@ -215,7 +255,8 @@
         }
 
         while (nextStepTime < context.currentTime + SCHEDULE_AHEAD) {
-            musicStep(nextStep, intensity).forEach(event => playInstrument(event, nextStepTime));
+            const events = track === 'title' ? titleStep(nextStep) : musicStep(nextStep, intensity);
+            events.forEach(event => playInstrument(event, nextStepTime));
             nextStepTime += stepDuration();
             nextStep++;
         }
@@ -225,9 +266,26 @@
         init();
         if (!context) return;
         stopMusic();
+        track = 'shop';
+        bpm = NORMAL_BPM;
         nextStep = 0;
         nextStepTime = context.currentTime + 0.05;
         schedulerId = setInterval(scheduler, LOOKAHEAD_MS);
+    }
+
+    function startTitleMusic() {
+        init();
+        if (!context) return;
+        stopMusic();
+        track = 'title';
+        bpm = TITLE_BPM;
+        nextStep = 0;
+        nextStepTime = context.currentTime + 0.05;
+        schedulerId = setInterval(scheduler, LOOKAHEAD_MS);
+    }
+
+    function isPlayingTitle() {
+        return schedulerId !== null && track === 'title';
     }
 
     function stopMusic() {
@@ -241,7 +299,9 @@
         intensity = Math.max(0, Math.min(3, level));
     }
 
+    // The siren speeds up the shop's music only; the title tune keeps its own pace.
     function setHurry(on) {
+        if (track !== 'shop') return;
         bpm = on ? HURRY_BPM : NORMAL_BPM;
     }
 
@@ -357,6 +417,9 @@
         playSuccess,
         playFail,
         playBlast,
+        startTitleMusic,
+        isPlayingTitle,
+        titleStep,
         playFanfare,
         fanfareNotes,
         fanfareSeconds: FANFARE_SECONDS,

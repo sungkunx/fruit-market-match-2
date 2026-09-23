@@ -94,3 +94,22 @@ test('fanfareNotes hands out a copy, so callers cannot edit the fanfare', () => 
     GameAudio.fanfareNotes()[0].midi = 1;
     assert.notEqual(GameAudio.fanfareNotes()[0].midi, 1);
 });
+
+test('the title tune has no drums: pads and a bass to open each bar, a music box on top', () => {
+    const instruments = new Set();
+    for (let step = 0; step < 64; step++) {
+        GameAudio.titleStep(step).forEach(event => instruments.add(event.instrument));
+    }
+    assert.deepEqual([...instruments].sort(), ['box', 'pad', 'softbass']);
+    for (let bar = 0; bar < 4; bar++) {
+        const opening = GameAudio.titleStep(bar * 16).map(event => event.instrument);
+        assert.equal(opening.filter(name => name === 'pad').length, 3, `bar ${bar} opens on a full chord`);
+        assert.ok(opening.includes('softbass'));
+    }
+});
+
+test('the title tune loops every 64 steps', () => {
+    for (let step = 0; step < 64; step++) {
+        assert.deepEqual(GameAudio.titleStep(step + 64), GameAudio.titleStep(step));
+    }
+});
