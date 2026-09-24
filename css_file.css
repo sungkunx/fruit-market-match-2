@@ -1466,19 +1466,19 @@ body.combo-bg-3 {
 
 /* 지점 개업: 깃발을 단 비행기가 가게 위를 가로지른다 */
 .banner-flight {
-    position: absolute;
-    top: 30%;
-    left: 100%;
-    z-index: 6;
+    position: fixed;
+    left: 100vw;
+    z-index: 900;
     display: flex;
     align-items: center;
     pointer-events: none;
-    animation: bannerFly 2.6s linear forwards;
+    animation: bannerFly 2.8s linear forwards;
 }
 
+/* 오른쪽 아래에서 왼쪽 위로 살짝 올라가며 가로지른다 */
 @keyframes bannerFly {
-    from { transform: translateX(12px); }
-    to { transform: translateX(calc(-100vw - 100%)); }
+    from { transform: translate(12px, 26px) rotate(5deg); }
+    to { transform: translate(calc(-100vw - 100%), -30px) rotate(5deg); }
 }
 
 .banner-plane {
@@ -1493,6 +1493,7 @@ body.combo-bg-3 {
 
 .banner-prop {
     transform-origin: 2.75px 16px;
+    transform-box: view-box;
     animation: propSpin 0.08s linear infinite;
 }
 
@@ -1502,21 +1503,21 @@ body.combo-bg-3 {
 }
 
 .banner-rope {
-    width: 16px;
-    height: 2px;
+    width: 26px;
+    height: 3px;
     background: var(--wood-dark);
 }
 
 .banner-flag {
-    padding: 4px 12px 4px 10px;
-    font-size: 14px;
+    padding: 6px 16px 6px 14px;
+    font-size: 19px;
     font-weight: 700;
     white-space: nowrap;
     color: var(--wood-dark);
     background: var(--cream);
-    border: 3px solid var(--wood-dark);
-    border-radius: 4px 12px 12px 4px;
-    box-shadow: 0 3px 0 var(--wood-dark);
+    border: 4px solid var(--wood-dark);
+    border-radius: 4px 14px 14px 4px;
+    box-shadow: 0 4px 0 var(--wood-dark);
     animation: flagWave 0.6s ease-in-out infinite;
     transform-origin: left center;
 }

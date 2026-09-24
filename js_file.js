@@ -56,7 +56,7 @@ let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
-const BANNER_FLIGHT_MS = 2700;
+const BANNER_FLIGHT_MS = 2900;
 const BLAST_FX_MS = 700; // how long a blast drawing stays on the board
 const BLAST_LEAD_MS = 130; // the beam reaches the fruits a moment before they pop
 const CELEBRATE_MS = 2600; // how long the confetti keeps falling after a new shop opens
@@ -1180,7 +1180,7 @@ async function growBoard(session) {
 }
 
 // A little plane drawn in code, nose to the left: it flies right to left over the shop.
-const PLANE_SVG = `<svg class="banner-plane" viewBox="0 0 64 32" width="58" height="29" aria-hidden="true">
+const PLANE_SVG = `<svg class="banner-plane" viewBox="0 0 64 32" width="96" height="48" aria-hidden="true">
     <path d="M6 16 Q10 10 22 10 L50 12 Q58 13 60 16 Q58 19 50 20 L22 22 Q10 22 6 16Z" fill="#E8413B" stroke="#5A3310" stroke-width="2"/>
     <circle cx="18" cy="15" r="3" fill="#CFE8F7" stroke="#5A3310" stroke-width="1.5"/>
     <path d="M26 16 L40 16 L34 28 L28 28Z" fill="#FFC53D" stroke="#5A3310" stroke-width="2"/>
@@ -1188,7 +1188,8 @@ const PLANE_SVG = `<svg class="banner-plane" viewBox="0 0 64 32" width="58" heig
     <rect class="banner-prop" x="1" y="7" width="3.5" height="18" rx="1.5" fill="#5A3310"/>
 </svg>`;
 
-// A new branch opens: a plane tows a banner with its name across the sky over the shop.
+// A new branch opens: a plane tows a banner with its name across the screen, climbing a little
+// as it passes along the seam between the cash bar and the fruit board.
 function flyBanner(text) {
     const flight = document.createElement('div');
     flight.className = 'banner-flight';
@@ -1199,7 +1200,12 @@ function flyBanner(text) {
     flag.className = 'banner-flag';
     flag.textContent = text;
     flight.append(rope, flag);
-    document.querySelector('.shop-area').appendChild(flight);
+    document.body.appendChild(flight);
+
+    const cashBar = document.querySelector('.dashboard').getBoundingClientRect();
+    const boardTop = document.getElementById('boardFrame').getBoundingClientRect().top;
+    const seam = (cashBar.bottom + boardTop) / 2;
+    flight.style.top = `${Math.round(seam - flight.offsetHeight / 2)}px`;
     setTimeout(() => flight.remove(), BANNER_FLIGHT_MS);
 }
 
