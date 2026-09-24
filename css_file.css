@@ -351,6 +351,16 @@ body.combo-bg-3 {
     box-shadow: 0 1px 0 var(--wood-dark);
 }
 
+/* 첫 터치 전: 여기를 누르면 음악이 나온다는 표시로 스피커가 숨 쉰다 */
+.start-sound-btn.waiting {
+    animation: speakerWaiting 1.2s ease-in-out infinite;
+}
+
+@keyframes speakerWaiting {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 197, 61, 0.7); }
+    50% { transform: scale(1.12); box-shadow: 0 0 0 10px rgba(255, 197, 61, 0); }
+}
+
 .start-sound-btn {
     position: absolute;
     top: 18px;
@@ -2392,6 +2402,7 @@ body.combo-bg-3 {
     .celebrate-flash,
     .fruit.special-born,
     .cell.just-opened,
+    .start-sound-btn.waiting,
     .banner-plane,
     .banner-prop,
     .banner-flag,

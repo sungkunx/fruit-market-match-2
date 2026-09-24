@@ -116,6 +116,12 @@ function updateSoundButtons() {
 
 function toggleSound() {
     GameAudio.init();
+    // On the title screen the first tap is what lets the browser make sound at all. If sound is
+    // on but the tune has not started yet, the speaker means "play", not "mute".
+    if (onStartScreen() && !GameAudio.isMuted() && !GameAudio.isPlayingTitle()) {
+        playTitleMusic();
+        return;
+    }
     GameAudio.setMuted(!GameAudio.isMuted());
     updateSoundButtons();
     playTitleMusic();
@@ -128,8 +134,16 @@ function onStartScreen() {
 // The title tune plays while the start screen is up. Browsers only allow sound after the first
 // touch, so this runs from a tap (the first one anywhere, the sound button, or coming home).
 function playTitleMusic() {
-    if (!onStartScreen() || GameAudio.isMuted() || GameAudio.isPlayingTitle()) return;
-    GameAudio.startTitleMusic();
+    if (onStartScreen() && !GameAudio.isMuted() && !GameAudio.isPlayingTitle()) {
+        GameAudio.startTitleMusic();
+    }
+    updateTitleMusicHint();
+}
+
+// Until the first tap, the speaker on the title screen pulses: that is where the music starts.
+function updateTitleMusicHint() {
+    const waiting = onStartScreen() && !GameAudio.isMuted() && !GameAudio.isPlayingTitle();
+    document.querySelector('.start-sound-btn').classList.toggle('waiting', waiting);
 }
 
 function formatMoney(value) {
@@ -2191,7 +2205,12 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-document.addEventListener('pointerdown', playTitleMusic);
+// The speaker handles its own tap (see toggleSound); any other first touch or key starts the tune.
+document.addEventListener('pointerdown', event => {
+    if (event.target.closest('.sound-btn')) return;
+    playTitleMusic();
+});
+document.addEventListener('keydown', playTitleMusic);
 
 // Initialize
 loadGameData();
@@ -2201,3 +2220,4 @@ setupGridInput();
 newBoard(1);
 renderBuilding(document.getElementById('buildingSlot'), 1);
 fillStartCrowd();
+updateTitleMusicHint();
