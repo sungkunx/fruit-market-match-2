@@ -25,10 +25,12 @@
         return total / windowSeconds;
     }
 
-    // Customers the shop should draw: a few per rent's worth of earning pace.
-    function targetCrowdSize(pace, rent, tuning) {
+    // Customers the shop should draw: a few per rent's worth of earning pace, and more for every
+    // branch standing next to the main shop.
+    function targetCrowdSize(pace, rent, tuning, branches = 1) {
         if (rent <= 0) return pace > 0 ? tuning.crowdMax : 0;
-        const size = Math.round(pace / rent * tuning.crowdPerRentPace);
+        const pull = 1 + (tuning.crowdPerBranch || 0) * (branches - 1);
+        const size = Math.round(pace / rent * tuning.crowdPerRentPace * pull);
         return Math.max(0, Math.min(tuning.crowdMax, size));
     }
 

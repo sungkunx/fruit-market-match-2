@@ -56,7 +56,7 @@ let shownRevenue = 0;
 let rentFloatPending = 0; // rent adds up for a second before it pops as one number
 let rentFloatClock = 0;
 const COST_FLOAT_MS = 900;
-const STEP_TOAST_MS = 1800;
+const BANNER_FLIGHT_MS = 2700;
 const BLAST_FX_MS = 700; // how long a blast drawing stays on the board
 const BLAST_LEAD_MS = 130; // the beam reaches the fruits a moment before they pop
 const CELEBRATE_MS = 2600; // how long the confetti keeps falling after a new shop opens
@@ -140,12 +140,10 @@ function stageInfo(stage) {
     return rules.stages[stage - 1];
 }
 
-// "천막 2", or just the name for a building with one step (the space tower).
+// Each step of a building is one more branch: "천막", "천막 2호점", "천막 3호점".
 function stageLabelIn(stages, stage) {
     const info = stages[stage - 1];
-    const steps = stages.filter(entry => entry.building === info.building).length;
-    // The practice shop (step 0) and the one-step tower go by their name alone.
-    return steps > 1 && info.sub > 0 ? `${info.name} ${info.sub}` : info.name;
+    return info.sub > 1 ? `${info.name} ${info.sub}호점` : info.name;
 }
 
 function stageLabel(stage) {
@@ -160,13 +158,14 @@ function isNewBuilding(stage) {
     return stage === 1 || buildingOf(stage) !== buildingOf(stage - 1);
 }
 
-// Morning, noon, dusk and night: the sky over each building runs through one day.
-const DAYTIMES = ['dawn', 'day', 'dusk', 'night'];
-
+// The space tower stands under the stars; every other shop keeps the market's own sky.
 function daytimeOf(stage) {
-    const info = stageInfo(stage);
-    const steps = rules.stages.filter(entry => entry.building === info.building).length;
-    return steps > 1 ? DAYTIMES[Math.max(0, info.sub - 1) % DAYTIMES.length] : 'space';
+    return stage === rules.stages.length ? 'space' : '';
+}
+
+// How many shops stand on the street at this step: the main one plus its branches.
+function branchesOf(stage) {
+    return Math.max(1, stageInfo(stage).sub || 1);
 }
 
 function fruitsForStage(stage) {
@@ -633,18 +632,30 @@ function pickRandom(list) {
     return list[Math.floor(Math.random() * list.length)];
 }
 
-// Queue spot for the customer at `index`: alternating left and right of the door.
+// Queue spot for the customer at `index`: three rows deep, filling outward from the door on
+// alternating sides, so a big crowd still fits in front of the shop.
 function customerSpot(index) {
-    const side = index % 2 === 0 ? -1 : 1;
-    const rank = Math.floor(index / 2) + 1;
-    return { x: side * (4 + rank * 20), scale: 1 - rank * 0.03, layer: 20 - rank };
+    const lane = index % 3; // 0 is the front row
+    const order = Math.floor(index / 3);
+    const side = order % 2 === 0 ? -1 : 1;
+    const rank = Math.floor(order / 2) + 1;
+    return {
+        x: side * (rank * 18 + lane * 7),
+        y: -lane * 7,
+        scale: 1 - lane * 0.07 - rank * 0.01,
+        layer: 40 - lane * 12 - rank
+    };
+}
+
+function spotTransform(x, spot) {
+    return `translate(${x}px, ${spot.y}px) scale(${spot.scale})`;
 }
 
 function layoutCustomers() {
     customers.forEach((customer, index) => {
         const spot = customerSpot(index);
         customer.x = spot.x;
-        customer.element.style.transform = `translateX(${spot.x}px) scale(${spot.scale})`;
+        customer.element.style.transform = spotTransform(spot.x, spot);
         customer.element.style.zIndex = String(spot.layer);
     });
 }
@@ -680,10 +691,10 @@ function createCustomerElement() {
 function addCustomer() {
     if (customers.length >= rules.crowdMax) return;
     const element = createCustomerElement();
-    const spotX = customerSpot(customers.length).x;
-    const entryX = spotX < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
-    faceCustomer(element, entryX, spotX);
-    element.style.transform = `translateX(${entryX}px)`;
+    const spot = customerSpot(customers.length);
+    const entryX = spot.x < 0 ? -CUSTOMER_EDGE_X : CUSTOMER_EDGE_X;
+    faceCustomer(element, entryX, spot.x);
+    element.style.transform = spotTransform(entryX, spot);
     document.getElementById('crowd').appendChild(element);
 
     const customer = { element, x: entryX, timer: 0 };
@@ -723,7 +734,7 @@ function clearCustomers() {
 // Walks customers in or out toward the size the recent earning pace calls for.
 function updateCrowd() {
     const pace = Crowd.earningPace(crowd, run.time, rules.crowdWindowSeconds);
-    const target = Crowd.targetCrowdSize(pace, Economy.currentRent(run, rules), rules);
+    const target = Crowd.targetCrowdSize(pace, Economy.currentRent(run, rules), rules, branchesOf(run.stage));
     if (customers.length > target) {
         removeOldestCustomer();
     } else {
@@ -816,6 +827,12 @@ function clearShopGraph() {
 // img/building_N.png when it exists. Callers pass buildingOf(stage), not the step.
 function renderBuilding(container, stage) {
     container.innerHTML = '';
+    const building = createBuilding(stage);
+    container.appendChild(building);
+    return building;
+}
+
+function createBuilding(stage) {
     const building = document.createElement('div');
     building.className = 'building';
     building.dataset.stage = stage;
@@ -837,16 +854,67 @@ function renderBuilding(container, stage) {
         img.src = `img/building_${stage}.png`;
         building.appendChild(img);
     }
-
-    container.appendChild(building);
     return building;
+}
+
+// The drawn size of each building type, width over height (see .building[data-stage] in CSS).
+const BUILDING_SHAPE = { 1: 66 / 60, 2: 104 / 90, 3: 136 / 130, 4: 210 / 170, 5: 209 / 210, 6: 168 / 250, 7: 198 / 300 };
+const SHOP_HEIGHT_FIRST = 62;  // the main shop at step 1
+const SHOP_HEIGHT_LAST = 200;  // the main shop at the last step before the tower
+const SHOP_HEIGHT_TOWER = 215;
+const BRANCH_SCALE = 0.62;
+
+// The main shop grows a little at every step instead of jumping when the building changes.
+function shopHeight(stage) {
+    const last = rules.stages.length - 1;
+    const height = stage > last
+        ? SHOP_HEIGHT_TOWER
+        : SHOP_HEIGHT_FIRST * Math.pow(SHOP_HEIGHT_LAST / SHOP_HEIGHT_FIRST, (stage - 1) / (last - 1));
+    const room = document.querySelector('.shop-area').clientHeight - 24;
+    return Math.round(room > 0 ? Math.min(height, room) : height);
+}
+
+function sizeBuilding(element, type, height) {
+    element.style.setProperty('--h', height);
+    element.style.setProperty('--w', Math.round(height * BUILDING_SHAPE[type]));
+}
+
+// The street in front of the board: the main shop in the middle and its branches beside it,
+// right, then left, then further left (the sign stands on the right). Returns the main shop and
+// the newest branch.
+function renderShopFront(stage) {
+    const slot = document.getElementById('buildingSlot');
+    slot.innerHTML = '';
+    const type = buildingOf(stage);
+    const height = shopHeight(stage);
+    const width = height * BUILDING_SHAPE[type];
+    const branchHeight = Math.round(height * BRANCH_SCALE);
+    const branchWidth = branchHeight * BUILDING_SHAPE[type];
+    const near = width / 2 + branchWidth / 2 - branchWidth * 0.22;
+    const offsets = [near, -near, -(near + branchWidth * 0.78)];
+
+    let newest = null;
+    for (let index = 0; index < branchesOf(stage) - 1; index++) {
+        const branch = createBuilding(type);
+        branch.classList.add('branch');
+        sizeBuilding(branch, type, branchHeight);
+        branch.style.left = `calc(50% + ${Math.round(offsets[index % offsets.length])}px)`;
+        slot.appendChild(branch);
+        newest = branch;
+    }
+
+    const main = createBuilding(type);
+    main.classList.add('main');
+    sizeBuilding(main, type, height);
+    slot.appendChild(main);
+    return { main, newest };
 }
 
 function updateStage() {
     document.getElementById('stageNumber').textContent = `${run.stage}단계`;
     document.getElementById('stageName').textContent = stageLabel(run.stage);
     document.querySelector('.shop-area').dataset.daytime = daytimeOf(run.stage);
-    return renderBuilding(document.getElementById('buildingSlot'), buildingOf(run.stage));
+    return renderShopFront(run.stage);
 }
 
 // "좌판으로", "매대로": 로 after a vowel or ㄹ, 으로 after any other final consonant.
@@ -1083,7 +1151,7 @@ function stopCelebrating() {
 }
 
 async function showNewBuilding() {
-    const building = updateStage();
+    const building = updateStage().main;
     await animate(building, [
         { transform: 'translateX(-50%) scale(0.6)', opacity: 0 },
         { transform: 'translateX(-50%) scale(1.12)', opacity: 1, offset: 0.6 },
@@ -1111,13 +1179,37 @@ async function growBoard(session) {
     clearAnimations(opened.cell);
 }
 
-// A small note over the shop for a step up. It never covers the board.
-function showStepToast(text) {
-    const toast = document.createElement('div');
-    toast.className = 'step-toast';
-    toast.textContent = text;
-    document.querySelector('.shop-area').appendChild(toast);
-    setTimeout(() => toast.remove(), STEP_TOAST_MS);
+// A little plane drawn in code, nose to the left: it flies right to left over the shop.
+const PLANE_SVG = `<svg class="banner-plane" viewBox="0 0 64 32" width="58" height="29" aria-hidden="true">
+    <path d="M6 16 Q10 10 22 10 L50 12 Q58 13 60 16 Q58 19 50 20 L22 22 Q10 22 6 16Z" fill="#E8413B" stroke="#5A3310" stroke-width="2"/>
+    <circle cx="18" cy="15" r="3" fill="#CFE8F7" stroke="#5A3310" stroke-width="1.5"/>
+    <path d="M26 16 L40 16 L34 28 L28 28Z" fill="#FFC53D" stroke="#5A3310" stroke-width="2"/>
+    <path d="M50 12 L58 3 L62 3 L58 14Z" fill="#FFC53D" stroke="#5A3310" stroke-width="2"/>
+    <rect class="banner-prop" x="1" y="7" width="3.5" height="18" rx="1.5" fill="#5A3310"/>
+</svg>`;
+
+// A new branch opens: a plane tows a banner with its name across the sky over the shop.
+function flyBanner(text) {
+    const flight = document.createElement('div');
+    flight.className = 'banner-flight';
+    flight.innerHTML = PLANE_SVG;
+    const rope = document.createElement('span');
+    rope.className = 'banner-rope';
+    const flag = document.createElement('span');
+    flag.className = 'banner-flag';
+    flag.textContent = text;
+    flight.append(rope, flag);
+    document.querySelector('.shop-area').appendChild(flight);
+    setTimeout(() => flight.remove(), BANNER_FLIGHT_MS);
+}
+
+// A new branch springs up next to the main shop.
+function popIn(building) {
+    return animate(building, [
+        { transform: 'translateX(-50%) scale(0.2) translateY(20px)', opacity: 0 },
+        { transform: 'translateX(-50%) scale(1.18)', opacity: 1, offset: 0.6 },
+        { transform: 'translateX(-50%) scale(1)', opacity: 1 }
+    ], { duration: 520, easing: 'ease-out' });
 }
 
 // Moving up a step inside the same building happens in play: no sheet, no card, no pause.
@@ -1126,9 +1218,11 @@ async function stepUp() {
     isAnimating = true;
     run = Economy.expand(run, rules);
     GameAudio.playSuccess(2);
-    updateStage();
+    GameAudio.playBlast('line-h');
+    const { newest } = updateStage();
+    if (newest) popIn(newest);
     updateDashboard();
-    showStepToast(`${stageLabel(run.stage)} · 진열대 한 칸 늘었어요`);
+    flyBanner(`${stageLabel(run.stage)} 오픈!`);
     await growBoard(session);
     if (session !== gameSession) return;
     isAnimating = false;
@@ -1763,7 +1857,7 @@ function fillStartCrowd() {
         const element = createCustomerElement();
         element.classList.replace('running', 'dancing');
         const spot = customerSpot(index);
-        element.style.transform = `translateX(${spot.x}px) scale(${spot.scale})`;
+        element.style.transform = spotTransform(spot.x, spot);
         element.style.zIndex = String(spot.layer);
         crowd.appendChild(element);
     }

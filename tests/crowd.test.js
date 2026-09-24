@@ -36,3 +36,11 @@ test('targetCrowdSize handles a shop with no rent', () => {
     assert.equal(Crowd.targetCrowdSize(5, 0, T), 14);
     assert.equal(Crowd.targetCrowdSize(0, 0, T), 0);
 });
+
+test('more branches draw more customers, up to the same ceiling', () => {
+    const tuning = { crowdPerRentPace: 3, crowdMax: 20, crowdPerBranch: 0.5 };
+    assert.equal(Crowd.targetCrowdSize(100, 100, tuning), 3);
+    assert.equal(Crowd.targetCrowdSize(100, 100, tuning, 1), 3);
+    assert.equal(Crowd.targetCrowdSize(100, 100, tuning, 3), 6);
+    assert.equal(Crowd.targetCrowdSize(1000, 100, tuning, 4), 20);
+});

@@ -71,8 +71,9 @@
         leaderboardMinScore: 100000,
         // Customers in front of the shop: earnings over the last window, compared with rent.
         crowdWindowSeconds: 8,
-        crowdPerRentPace: 3,
-        crowdMax: 14,
+        crowdPerRentPace: 6,
+        crowdMax: 32,
+        crowdPerBranch: 0.3,
         crowdUpdateSeconds: 0.5
     };
 

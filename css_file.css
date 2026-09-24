@@ -976,7 +976,7 @@ body.combo-bg-3 {
     overflow: hidden; /* 6·7단계 건물은 윗부분이 잘린다 */
 }
 
-/* 가게 위 하늘: 건물마다 아침 → 낮 → 노을 → 밤. 우주 건물은 별밤 */
+/* 우주 최강 건물만 별밤 하늘 아래 선다 */
 .shop-area::before {
     content: '';
     position: absolute;
@@ -985,27 +985,6 @@ body.combo-bg-3 {
     border-radius: 0 0 14px 14px;
     opacity: 0.85;
     transition: background 1.2s ease;
-}
-
-.shop-area[data-daytime="dawn"]::before {
-    background: linear-gradient(180deg, #FFD9B0 0%, #FFB895 100%);
-}
-
-.shop-area[data-daytime="day"]::before {
-    background: linear-gradient(180deg, #9FD8FF 0%, #DDF2FF 100%);
-}
-
-.shop-area[data-daytime="dusk"]::before {
-    background: linear-gradient(180deg, #C8638F 0%, #FF9F5A 100%);
-}
-
-.shop-area[data-daytime="night"]::before {
-    background:
-        radial-gradient(circle at 18% 22%, #fff 0 1.5px, transparent 2px),
-        radial-gradient(circle at 62% 14%, #fff 0 1px, transparent 1.5px),
-        radial-gradient(circle at 84% 34%, #fff 0 1.5px, transparent 2px),
-        radial-gradient(circle at 38% 40%, #fff 0 1px, transparent 1.5px),
-        linear-gradient(180deg, #221C4A 0%, #4A3D84 100%);
 }
 
 .shop-area[data-daytime="space"]::before {
@@ -1485,31 +1464,76 @@ body.combo-bg-3 {
 
 /* ---------- 보드 프레임 ---------- */
 
-/* 같은 건물 안에서 한 단계 오를 때 가게 위에 잠깐 뜨는 알림 */
-.step-toast {
+/* 지점 개업: 깃발을 단 비행기가 가게 위를 가로지른다 */
+.banner-flight {
     position: absolute;
-    left: 50%;
-    bottom: 34px;
-    z-index: 5;
-    padding: 6px 14px;
+    top: 30%;
+    left: 100%;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    animation: bannerFly 2.6s linear forwards;
+}
+
+@keyframes bannerFly {
+    from { transform: translateX(12px); }
+    to { transform: translateX(calc(-100vw - 100%)); }
+}
+
+.banner-plane {
+    flex-shrink: 0;
+    animation: planeBob 0.9s ease-in-out infinite;
+}
+
+@keyframes planeBob {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-4px) rotate(2deg); }
+}
+
+.banner-prop {
+    transform-origin: 2.75px 16px;
+    animation: propSpin 0.08s linear infinite;
+}
+
+@keyframes propSpin {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.2); }
+}
+
+.banner-rope {
+    width: 16px;
+    height: 2px;
+    background: var(--wood-dark);
+}
+
+.banner-flag {
+    padding: 4px 12px 4px 10px;
     font-size: 14px;
     font-weight: 700;
     white-space: nowrap;
     color: var(--wood-dark);
-    background: var(--gold);
+    background: var(--cream);
     border: 3px solid var(--wood-dark);
-    border-radius: 999px;
+    border-radius: 4px 12px 12px 4px;
     box-shadow: 0 3px 0 var(--wood-dark);
-    pointer-events: none;
-    animation: stepToast 1.8s ease-out forwards;
+    animation: flagWave 0.6s ease-in-out infinite;
+    transform-origin: left center;
 }
 
-@keyframes stepToast {
-    0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); }
-    15% { opacity: 1; transform: translate(-50%, 0) scale(1.05); }
-    25% { transform: translate(-50%, 0) scale(1); }
-    80% { opacity: 1; }
-    100% { opacity: 0; transform: translate(-50%, -8px); }
+@keyframes flagWave {
+    0%, 100% { transform: skewY(-3deg); }
+    50% { transform: skewY(3deg); }
+}
+
+/* 본점 옆에 늘어서는 지점: 본점 뒤로 살짝 겹친다 */
+.building.branch {
+    z-index: 1;
+    filter: saturate(0.92);
+}
+
+.building.main {
+    z-index: 2;
 }
 
 /* 7×7 틀에서 아직 열리지 않은 칸 */
@@ -2342,6 +2366,13 @@ body.combo-bg-3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    /* 비행기는 날지 않고 깃발만 가운데 잠깐 보인다 */
+    .banner-flight {
+        animation: none !important;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
     .sunburst,
     .bulb,
     .confetti span,
@@ -2360,7 +2391,9 @@ body.combo-bg-3 {
     .celebrate-flash,
     .fruit.special-born,
     .cell.just-opened,
-    .step-toast,
+    .banner-plane,
+    .banner-prop,
+    .banner-flag,
     .fruit[data-special]::after,
     .fruit[data-special]::before,
     .blast-fx,
