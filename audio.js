@@ -376,7 +376,7 @@
         if (!context) return;
         const now = context.currentTime;
 
-        if (kind === 'line-h' || kind === 'line-v') {
+        if (kind === 'line-h' || kind === 'line-v' || kind === 'diag-up' || kind === 'diag-down') {
             playNoise(sfxGain, now, { filterType: 'bandpass', frequency: 900, peak: 0.5, duration: 0.3 });
             playTone(sfxGain, now, { type: 'sawtooth', freq: 320, endFreq: 1800, peak: 0.28, duration: 0.3 });
             return;

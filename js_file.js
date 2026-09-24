@@ -366,6 +366,23 @@ function playBlastEffects(fired) {
                     width: `${size}px`,
                     height: `${size}px`
                 });
+            } else if (item.kind === 'diag-up' || item.kind === 'diag-down') {
+                // A clipped layer the size of the grid holds a beam tilted through the special.
+                const clip = addBlastLayer('blast-clip', { left: '0px', top: '0px', width: `${grid.clientWidth}px`, height: `${grid.clientHeight}px` });
+                const length = Math.hypot(grid.clientWidth, grid.clientHeight) * 1.2;
+                const tilt = document.createElement('div');
+                tilt.className = 'blast-tilt';
+                Object.assign(tilt.style, {
+                    left: `${box.left + box.width / 2 - length / 2}px`,
+                    top: `${box.top + box.height / 2 - thickness / 2}px`,
+                    width: `${length}px`,
+                    height: `${thickness}px`,
+                    transform: `rotate(${item.kind === 'diag-up' ? -45 : 45}deg)`
+                });
+                const beam = document.createElement('div');
+                beam.className = 'blast-beam diagonal';
+                tilt.appendChild(beam);
+                clip.appendChild(tilt);
             } else if (item.kind === 'stock') {
                 addBlastLayer('blast-rainbow', { left: '0px', top: '0px', width: `${grid.clientWidth}px`, height: `${grid.clientHeight}px` });
             }

@@ -227,11 +227,22 @@
         return best ? best[0] : null;
     }
 
+    // Every cell on one diagonal through `cell`: '/' runs up to the right, '\\' down to the right.
+    function diagonalCells(board, cell, kind) {
+        const cells = [];
+        board.forEach((line, row) => line.forEach((value, col) => {
+            const onIt = kind === 'diag-up' ? row + col === cell.row + cell.col : row - col === cell.row - cell.col;
+            if (onIt) cells.push({ row, col });
+        }));
+        return cells;
+    }
+
     // The cells a special sweeps when it goes off.
     function activationCells(board, cell) {
         const kind = specialOf(board[cell.row][cell.col]);
         if (kind === 'line-h') return board[cell.row].map((value, col) => ({ row: cell.row, col }));
         if (kind === 'line-v') return board.map((line, row) => ({ row, col: cell.col }));
+        if (kind === 'diag-up' || kind === 'diag-down') return diagonalCells(board, cell, kind);
         if (kind === 'crate') return cellsAround(board, cell, 1);
         if (kind === 'stock') {
             const fruit = fullestFruit(board);
@@ -264,7 +275,20 @@
         return { cells: [...chosen.values()], fired };
     }
 
-    function cascade(board, rng, fruits, startChain, preferred = [], specials = true) {
+    // A diagonal is born where the second step of a swap's cascade pops: the middle of its first
+    // group, on a cell no shape special took. Only swaps make them, so a blast's own cascade can
+    // never breed more diagonals by itself.
+    function diagonalBirth(groups, born, rng) {
+        const taken = new Set(born.map(item => cellKey(item.cell)));
+        const group = groups.find(entry => entry.fruit && entry.cells.some(cell => !taken.has(cellKey(cell))));
+        if (!group) return null;
+        const free = group.cells.filter(cell => !taken.has(cellKey(cell)));
+        const cell = free[Math.floor(free.length / 2)];
+        const kind = rng() < 0.5 ? 'diag-up' : 'diag-down';
+        return { cell, kind, value: withSpecial(group.fruit, kind) };
+    }
+
+    function cascade(board, rng, fruits, startChain, preferred = [], specials = true, diagonals = false) {
         const steps = [];
         let current = board;
         let chain = startChain;
@@ -278,6 +302,10 @@
                     const kind = specialFor(group);
                     if (kind) born.push({ cell: bornCell(group, wanted), kind, value: newSpecial(group, kind) });
                 });
+            }
+            if (diagonals && chain === 2) {
+                const diagonal = diagonalBirth(groups, born, rng);
+                if (diagonal) born.push(diagonal);
             }
 
             const seeded = cloneBoard(current);
@@ -318,7 +346,7 @@
         if (findMatches(swappedBoard).length === 0) {
             return { valid: false };
         }
-        const { steps, finalBoard } = cascade(swappedBoard, rng, fruits, 1, [b, a], specials);
+        const { steps, finalBoard } = cascade(swappedBoard, rng, fruits, 1, [b, a], specials, specials);
         return { valid: true, swappedBoard, steps, finalBoard };
     }
 
@@ -590,6 +618,7 @@
         specialOf,
         withSpecial,
         activationCells,
+        diagonalCells,
         HOLE,
         isHole,
         frameBoard,

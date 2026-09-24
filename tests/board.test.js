@@ -95,8 +95,9 @@ test('resolveMove rejects a swap that makes no match', () => {
 });
 
 test('resolveMove plays out the full chain reaction', () => {
+    // The plain rules, with no specials: the same path the practice shop takes.
     const board = parseBoard(CHAIN_BOARD);
-    const result = Board.resolveMove(board, { row: 3, col: 1 }, { row: 2, col: 1 }, chainRng(), CHAIN_FRUITS);
+    const result = Board.resolveMove(board, { row: 3, col: 1 }, { row: 2, col: 1 }, chainRng(), CHAIN_FRUITS, false);
 
     assert.equal(result.valid, true);
     assert.deepEqual(boardToLines(result.swappedBoard), ['kqm', 'kno', 'aaa', 'kbd', 'efg']);
@@ -500,4 +501,65 @@ test('an 8x7 frame starts with its 6x5 middle open, and openAll opens everything
     assert.equal(rest.cells.length, 2);
     assert.equal(Board.openCount(rest.board), 56);
     assert.deepEqual(Board.findMatches(rest.board), []);
+});
+
+test('a swap that cascades into a second step leaves exactly one diagonal there', () => {
+    const fruits = ['a', 'b', 'c', 'd', 'e'];
+    let seen = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+        const rng = seededRng(seed);
+        let board = Board.frameBoard(Board.createBoard(rng, fruits, 6, 5), 8, 7);
+        for (let move = 0; move < 25; move++) {
+            const best = Board.findBestMove(board);
+            if (!best) { board = Board.shuffle(board, rng); continue; }
+            const result = Board.resolveMove(board, best.a, best.b, rng, fruits);
+            const diagonals = result.steps.map(step => step.born.filter(item => item.kind.startsWith('diag')));
+            if (result.steps.length >= 2) {
+                assert.equal(diagonals[1].length, 1, `seed ${seed} move ${move}: one diagonal at step two`);
+                // It stands on one of the cells the second step matched, and that cell was spared.
+                const { cell } = diagonals[1][0];
+                const matchedThere = result.steps[1].groups.some(group => group.cells.some(other => other.row === cell.row && other.col === cell.col));
+                const cleared = result.steps[1].cleared.some(other => other.row === cell.row && other.col === cell.col);
+                assert.equal(cleared, false, 'the diagonal survives its own step');
+                assert.equal(matchedThere, false, 'the sold groups do not count the spared cell');
+                seen++;
+            }
+            diagonals.forEach((list, index) => {
+                if (index !== 1) assert.equal(list.length, 0, `seed ${seed} move ${move}: no diagonal at step ${index + 1}`);
+            });
+            board = result.finalBoard;
+        }
+    }
+    assert.ok(seen > 20, 'cascades of two steps are common enough to test');
+});
+
+test('a blast\'s own cascade never makes a diagonal, and the practice shop makes none at all', () => {
+    const fruits = ['a', 'b', 'c', 'd'];
+    for (let seed = 1; seed <= 30; seed++) {
+        const rng = seededRng(seed);
+        const board = Board.frameBoard(Board.createBoard(rng, fruits, 6, 5), 8, 7);
+        board[3][3] = Board.withSpecial(Board.fruitOf(board[3][3]), 'crate');
+        const blasted = Board.blast(board, { row: 3, col: 3 }, rng, fruits);
+        blasted.steps.forEach(step => {
+            assert.equal(step.born.filter(item => item.kind.startsWith('diag')).length, 0);
+        });
+
+        const plain = Board.frameBoard(Board.createBoard(rng, fruits, 6, 5), 8, 7);
+        const best = Board.findBestMove(plain);
+        const practice = Board.resolveMove(plain, best.a, best.b, rng, fruits, false);
+        practice.steps.forEach(step => assert.equal(step.born.length, 0));
+    }
+});
+
+test('a diagonal sweeps its open cells: / up to the right, \\ down to the right', () => {
+    const board = parseBoard(['#bcd', 'efgh', 'ijk#']);
+    board[1][1] = Board.withSpecial('f', 'diag-up');
+    const up = Board.blast(board, { row: 1, col: 1 }, seededRng(2), ['x', 'y', 'z']);
+    assert.deepEqual(cellKeys(up.steps[0].cleared), ['0,2', '1,1', '2,0']);
+
+    const down = parseBoard(['#bcd', 'efgh', 'ijk#']);
+    down[1][1] = Board.withSpecial('f', 'diag-down');
+    const result = Board.blast(down, { row: 1, col: 1 }, seededRng(2), ['x', 'y', 'z']);
+    // (0,0) and (2,2)... are on it; (0,0) is closed, so only the open ones go.
+    assert.deepEqual(cellKeys(result.steps[0].cleared), ['1,1', '2,2']);
 });

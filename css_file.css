@@ -1609,6 +1609,28 @@ body.combo-bg-3 {
     to { background-position: 18px 0; }
 }
 
+/* 대각선: 금빛 테두리에 45° 빛줄이 흐른다. / 는 오른쪽 위로, \ 는 오른쪽 아래로 */
+.fruit[data-special="diag-up"]::after,
+.fruit[data-special="diag-down"]::after {
+    border: 2px solid var(--gold);
+    box-shadow: 0 0 12px var(--gold), inset 0 0 10px rgba(255, 255, 255, 0.7);
+    background-size: 200% 200%;
+    animation: stripeFlowDiag 1s linear infinite;
+}
+
+.fruit[data-special="diag-up"]::after {
+    background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.9) 0 3px, rgba(255, 255, 255, 0) 3px 9px);
+}
+
+.fruit[data-special="diag-down"]::after {
+    background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.9) 0 3px, rgba(255, 255, 255, 0) 3px 9px);
+}
+
+@keyframes stripeFlowDiag {
+    from { background-position: 0 0; }
+    to { background-position: 17px 17px; }
+}
+
 /* 상자: 과일을 나무 궤짝이 감싸고 살짝 들썩인다 */
 .fruit[data-special="crate"]::after {
     inset: 0;
@@ -1710,6 +1732,25 @@ body.combo-bg-3 {
     0% { transform: scaleY(0.05) scaleX(0.4); opacity: 0.2; }
     35% { transform: scaleY(1) scaleX(1); opacity: 1; }
     100% { transform: scaleY(1) scaleX(0.5); opacity: 0; }
+}
+
+/* 대각선: 판 크기로 잘린 층 안에서 기울어진 빛줄기가 지나간다 */
+.blast-clip {
+    overflow: hidden;
+    border-radius: 10px;
+}
+
+.blast-tilt {
+    position: absolute;
+}
+
+.blast-beam.diagonal {
+    width: 100%;
+    height: 100%;
+    background:
+        linear-gradient(0deg, rgba(255, 197, 61, 0) 0%, var(--gold) 18%, #fff 50%, var(--gold) 82%, rgba(255, 197, 61, 0) 100%),
+        linear-gradient(90deg, rgba(232, 65, 59, 0) 0%, var(--awning-red) 12%, var(--awning-red) 88%, rgba(232, 65, 59, 0) 100%);
+    box-shadow: 0 0 26px var(--gold), 0 0 10px #fff;
 }
 
 /* 상자: 퍼져 나가는 충격파 */
@@ -2409,6 +2450,7 @@ body.combo-bg-3 {
     .fruit[data-special]::after,
     .fruit[data-special]::before,
     .blast-fx,
+    .blast-beam,
     .board-frame.shaking,
     .customer.cheering .customer-body,
     .earning-float {
