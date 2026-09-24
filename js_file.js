@@ -269,12 +269,12 @@ function renderBoard() {
     }
 }
 
-// Every run starts from the 5x5 middle of the 7x7 frame.
+// Every run starts from the 6x5 middle of the 8x7 frame.
 function newBoard(stage) {
     activeFruits = fruitsForStage(stage);
-    const start = Board.createBoard(Math.random, activeFruits, rules.startSize, rules.startSize);
-    board = Board.frameBoard(start, rules.frameSize);
-    buildGrid(rules.frameSize, rules.frameSize);
+    const start = Board.createBoard(Math.random, activeFruits, rules.startCols, rules.startRows);
+    board = Board.frameBoard(start, rules.frameCols, rules.frameRows);
+    buildGrid(rules.frameCols, rules.frameRows);
     renderBoard();
 }
 
@@ -1174,23 +1174,35 @@ async function showNewBuilding() {
 }
 
 // The shop grew: one closed cell next to the board opens, glows, and a fruit drops into it.
+// The space tower opens every cell still closed, so the last step fills the whole frame.
 async function growBoard(session) {
     activeFruits = fruitsForStage(run.stage);
-    const opened = Board.openCell(board, activeFruits, Math.random);
-    if (!opened) return;
-    board = opened.board;
+    let cells;
+    if (run.stage === rules.stages.length) {
+        const all = Board.openAll(board, activeFruits, Math.random);
+        board = all.board;
+        cells = all.cells;
+    } else {
+        const opened = Board.openCell(board, activeFruits, Math.random);
+        if (!opened) return;
+        board = opened.board;
+        cells = [opened.cell];
+    }
+    if (cells.length === 0) return;
     renderBoard();
 
-    const element = cellElements[opened.cell.row][opened.cell.col];
-    element.classList.add('just-opened');
-    setTimeout(() => element.classList.remove('just-opened'), 900);
-    await animate(fruitWrapper(opened.cell), [
-        { transform: `translateY(${-cellPitch()}px) scale(0.3)`, opacity: 0 },
-        { transform: 'translateY(0px) scale(1.2)', opacity: 1, offset: 0.7 },
-        { transform: 'translateY(0px) scale(1)', opacity: 1 }
-    ], { duration: 420, easing: 'ease-out' });
+    await Promise.all(cells.map((cell, index) => {
+        const element = cellElements[cell.row][cell.col];
+        element.classList.add('just-opened');
+        setTimeout(() => element.classList.remove('just-opened'), 900 + index * 120);
+        return animate(fruitWrapper(cell), [
+            { transform: `translateY(${-cellPitch()}px) scale(0.3)`, opacity: 0 },
+            { transform: 'translateY(0px) scale(1.2)', opacity: 1, offset: 0.7 },
+            { transform: 'translateY(0px) scale(1)', opacity: 1 }
+        ], { duration: 420, delay: index * 120, easing: 'ease-out', fill: 'backwards' });
+    }));
     if (session !== gameSession) return;
-    clearAnimations(opened.cell);
+    cells.forEach(cell => clearAnimations(cell));
 }
 
 // A little plane drawn in code, nose to the left: it flies right to left over the shop.

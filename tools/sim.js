@@ -64,7 +64,7 @@ function playRun(interval, seed) {
     const rng = seededRng(seed);
     const first = Tuning.stages[0];
     let run = Economy.createRun(Tuning);
-    let board = Board.frameBoard(Board.createBoard(rng, fruitsFor(1), Tuning.startSize, Tuning.startSize), Tuning.frameSize);
+    let board = Board.frameBoard(Board.createBoard(rng, fruitsFor(1), Tuning.startCols, Tuning.startRows), Tuning.frameCols, Tuning.frameRows);
     let nextSwapAt = interval;
     const reachedAt = [];
 
@@ -107,8 +107,12 @@ function playRun(interval, seed) {
         if (Economy.canExpand(run, Tuning)) {
             run = Economy.expand(run, Tuning);
             reachedAt.push(Math.round(run.time));
-            const opened = Board.openCell(board, fruitsFor(run.stage), rng);
-            if (opened) board = opened.board;
+            if (run.stage === Tuning.stages.length) {
+                board = Board.openAll(board, fruitsFor(run.stage), rng).board;
+            } else {
+                const opened = Board.openCell(board, fruitsFor(run.stage), rng);
+                if (opened) board = opened.board;
+            }
         }
     }
 

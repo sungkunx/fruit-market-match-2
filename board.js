@@ -474,14 +474,14 @@
         }
     }
 
-    // Sets a board in the middle of a size x size frame of closed cells.
-    function frameBoard(board, size) {
-        const top = Math.floor((size - board.length) / 2);
-        const left = Math.floor((size - board[0].length) / 2);
+    // Sets a board in the middle of a cols x rows frame of closed cells (square if rows is left out).
+    function frameBoard(board, cols, rows = cols) {
+        const top = Math.floor((rows - board.length) / 2);
+        const left = Math.floor((cols - board[0].length) / 2);
         const framed = [];
-        for (let row = 0; row < size; row++) {
+        for (let row = 0; row < rows; row++) {
             const line = [];
-            for (let col = 0; col < size; col++) {
+            for (let col = 0; col < cols; col++) {
                 const inside = row >= top && row < top + board.length && col >= left && col < left + board[0].length;
                 line.push(inside ? board[row - top][col - left] : HOLE);
             }
@@ -511,6 +511,17 @@
         const options = fruits.filter(fruit => !makesLine(next, cell, fruit));
         next[cell.row][cell.col] = randomFruit(rng, options.length > 0 ? options : fruits);
         return { board: hasPossibleMove(next) ? next : shuffle(next, rng), cell };
+    }
+
+    // Opens every closed cell left, one after another, each touching the board as it opens.
+    function openAll(board, fruits, rng) {
+        let current = board;
+        const cells = [];
+        for (let opened = openCell(current, fruits, rng); opened; opened = openCell(current, fruits, rng)) {
+            current = opened.board;
+            cells.push(opened.cell);
+        }
+        return { board: current, cells };
     }
 
     function openCount(board) {
@@ -584,6 +595,7 @@
         frameBoard,
         openableCells,
         openCell,
+        openAll,
         openCount,
         findBestMove,
         hasPossibleMove,

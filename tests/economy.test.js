@@ -7,7 +7,8 @@ const Economy = require('../economy.js');
 const T = {
     startCash: 500,
     fruitOrder: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-    frameSize: 7,
+    frameCols: 7,
+    frameRows: 7,
     stages: [
         { name: 's1', building: 1, cols: 5, rows: 5, fruits: 3, price: 2, rent: 10, logistics: 0, expandCost: 1000 },
         { name: 's2', building: 2, cols: 6, rows: 5, fruits: 4, price: 5, rent: 20, logistics: 6, expandCost: 2000 },

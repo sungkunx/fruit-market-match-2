@@ -482,3 +482,22 @@ test('a striped tile sweeps only the open cells of its row', () => {
     assert.equal(Board.isHole(result.finalBoard[0][0]), true);
     assert.equal(Board.isHole(result.finalBoard[0][4]), true);
 });
+
+test('an 8x7 frame starts with its 6x5 middle open, and openAll opens everything left', () => {
+    const fruits = ['a', 'b', 'c', 'd', 'e'];
+    let board = Board.frameBoard(Board.createBoard(seededRng(12), fruits, 6, 5), 8, 7);
+    assert.equal(board.length, 7);
+    assert.equal(board[0].length, 8);
+    assert.equal(Board.openCount(board), 30);
+    assert.equal(Board.isHole(board[0][0]), true);
+    assert.equal(Board.isHole(board[1][1]), false);
+    assert.equal(Board.isHole(board[1][7]), true);
+
+    for (let step = 0; step < 24; step++) board = Board.openCell(board, fruits, seededRng(40 + step)).board;
+    assert.equal(Board.openCount(board), 54);
+
+    const rest = Board.openAll(board, fruits, seededRng(99));
+    assert.equal(rest.cells.length, 2);
+    assert.equal(Board.openCount(rest.board), 56);
+    assert.deepEqual(Board.findMatches(rest.board), []);
+});

@@ -1755,11 +1755,11 @@ body.combo-bg-3 {
 }
 
 .board-frame {
-    --frame: min(360px, calc(100vw - 16px), calc(100vh - 430px));
-    --cell: calc((var(--frame) - 32px) / 7);
+    /* 8칸 × 7칸 틀. 폭과 높이 중 좁은 쪽에 맞춰 한 칸 크기를 정한다 */
+    --cell: min(44px, calc((100vw - 48px) / 8), calc((100vh - 462px) / 7));
     position: relative;
-    width: var(--frame);
-    height: var(--frame);
+    width: calc(var(--cell) * 8 + 32px);
+    height: calc(var(--cell) * 7 + 32px);
     flex-shrink: 0;
     display: flex;
     align-items: center;
